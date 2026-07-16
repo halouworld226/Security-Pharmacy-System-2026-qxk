@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>出入库管理 - 药房管理员工作台</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.3.0-alpha1/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background-color: #f0f2f5; font-family: 'Segoe UI', system-ui, 'Roboto', sans-serif; }
+        .top-nav {
+            background-color: #0d6efd;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            color: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        .logo-area { font-size: 1.2rem; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+        .user-area { display: flex; align-items: center; gap: 20px; }
+        .user-info { text-align: right; line-height: 1.3; }
+        .user-name { font-weight: 600; font-size: 14px; }
+        .user-role { font-size: 12px; opacity: 0.85; }
+        .logout-btn {
+            color: white; background: rgba(255,255,255,0.15); border-radius: 8px;
+            padding: 6px 14px; text-decoration: none; font-size: 13px; transition: 0.2s;
+        }
+        .logout-btn:hover { background: rgba(255,255,255,0.25); color: white; }
+        .sidebar {
+            width: 260px; background-color: #ffffff; border-right: 1px solid #e9ecef;
+            height: calc(100vh - 60px); position: sticky; top: 60px; overflow-y: auto;
+            padding: 16px 0;
+        }
+        .sidebar .nav-link {
+            color: #495057; padding: 10px 20px; margin: 2px 12px; border-radius: 10px;
+            display: flex; align-items: center; gap: 12px; transition: all 0.2s;
+        }
+        .sidebar .nav-link i { font-size: 1.2rem; width: 24px; }
+        .sidebar .nav-link:hover { background-color: #e9ecef; color: #0d6efd; }
+        .sidebar .nav-link.active { background-color: #e7f1ff; color: #0d6efd; font-weight: 500; }
+        .main-content { flex: 1; padding: 24px; background-color: #f0f2f5; overflow-y: auto; }
+        .wrapper { display: flex; }
+        .card-custom {
+            border: none; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            background-color: #fff;
+            margin-bottom: 1.5rem;
+        }
+        .card-header-custom {
+            background: transparent; border-bottom: 1px solid #f1f5f9;
+            font-weight: 600; padding: 1rem 1rem 0.5rem 1rem;
+        }
+        .card-body-custom { padding: 1rem; }
+        .form-group { margin-bottom: 0.75rem; }
+        .form-label { font-weight: 500; margin-bottom: 0.25rem; font-size: 0.85rem; }
+        .alert {
+            border-radius: 12px;
+        }
+        .btn-equal-width {
+            flex: 1;
+            min-width: 80px;
+        }
+    </style>
+</head>
+<body>
+<div class="top-nav">
+    <div class="logo-area"><i class="bi bi-shop"></i> 药房管理系统</div>
+    <div class="user-area">
+        <div class="user-info">
+            <div class="user-name">{{ current_user.real_name if current_user else '药房管理员' }}</div>
+            <div class="user-role">{{ current_user.role if current_user else '药房管理员' }} · {{ current_user.store_name if current_user else '总店' }}</div>
+        </div>
+        <a href="/logout" class="logout-btn"><i class="bi bi-box-arrow-right"></i> 退出</a>
+    </div>
+</div>
+<div class="wrapper">
+    <div class="sidebar">
+        <nav class="nav flex-column">
+            <a class="nav-link" href="/shopmanager_dashboard"><i class="bi bi-house-door"></i> 首页概览</a>
+            <a class="nav-link" href="/shopmanager/medicines_fixed"><i class="bi bi-capsule"></i> 药品管理</a>
+            <a class="nav-link" href="/shopmanager/sales_records"><i class="bi bi-receipt"></i> 销售记录</a>
+            <a class="nav-link" href="/shopmanager/inventory_warning"><i class="bi bi-exclamation-triangle"></i> 库存预警</a>
+            <a class="nav-link active" href="/shopmanager/stock_io"><i class="bi bi-arrow-left-right"></i> 出入库管理</a>
+        </nav>
+    </div>
+    <div class="main-content">
+        <!-- Flash 消息显示区域 -->
+        <div class="container-fluid p-0 mb-3">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endwith %}
+        </div>
+
+        <!-- 入库表单（药品选择模糊查询，搜索药品按钮与查看详情按钮等宽） -->
+        <div class="card-custom">
+            <div class="card-header-custom">📥 药品入库</div>
+            <div class="card-body-custom">
+                <form method="POST" action="/stock_in" id="stockInForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div class="row g-3">
+                        <!-- 第一行：药品选择（模糊查询） -->
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="form-label">药品 <span class="text-danger">*</span></label>
+                                <div class="d-flex gap-2">
+                                    <input type="text" id="medicine_keyword" class="form-control form-control-sm" placeholder="输入药品名称/编码/厂家">
+                                    <button type="button" class="btn btn-sm btn-primary btn-equal-width" id="search_medicine_btn">搜索药品</button>
+                                </div>
+                                <input type="hidden" name="medicine_id" id="selected_medicine_id">
+                                <div id="selected_medicine_info" class="mt-2 small text-success" style="display:none;">
+                                    已选药品：<span id="selected_medicine_name"></span>
+                                </div>
+                                <!-- 查看详情按钮（选择后可见，与搜索按钮等宽） -->
+                                <button type="button" class="btn btn-sm btn-outline-info btn-equal-width mt-2" id="in_medicine_detail_btn" style="display:none;">查看详情</button>
+                            </div>
+                        </div>
+
+                        <!-- 批次号、数量 -->
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label class="form-label">批次号 <span class="text-danger">*</span></label>
+                                <input type="text" name="batch_no" class="form-control form-control-sm" required>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label class="form-label">数量 <span class="text-danger">*</span></label>
+                                <input type="number" name="quantity" class="form-control form-control-sm" required>
+                            </div>
+                        </div>
+
+                        <!-- 第二行：进价、生产日期、有效期至、供应商 -->
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label class="form-label">进价 (元) <span class="text-danger">*</span></label>
+                                <input type="number" step="0.01" name="purchase_price" class="form-control form-control-sm" required>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label class="form-label">生产日期</label>
+                                <input type="date" name="production_date" class="form-control form-control-sm">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label class="form-label">有效期至</label>
+                                <input type="date" name="expiry_date" class="form-control form-control-sm">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label class="form-label">供应商 <span class="text-danger">*</span></label>
+                                <select name="supplier_id" class="form-select form-select-sm" required>
+                                    <option value="">请选择供应商</option>
+                                    {% for sup in suppliers %}
+                                    <option value="{{ sup.id }}">{{ sup.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <input type="hidden" name="store_name" value="{{ current_user.store_name }}">
+                            <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-box-arrow-in-down"></i> 提交入库</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 出库表单 -->
+        <div class="card-custom">
+            <div class="card-header-custom">📤 药品出库</div>
+            <div class="card-body-custom">
+                <form method="POST" action="/stock_out">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label class="form-label">药品 <span class="text-danger">*</span></label>
+                                <select name="medicine_id" class="form-select form-select-sm" required>
+                                    <option value="">请选择药品</option>
+                                    {% for med in medicines %}
+                                    <option value="{{ med.id }}">{{ med.name }} ({{ med.code }})</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-group">
+                                <label class="form-label">数量 <span class="text-danger">*</span></label>
+                                <input type="number" name="quantity" class="form-control form-control-sm" required>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label class="form-label">出库类型 <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control form-control-sm" value="报损出库" readonly disabled>
+                                <input type="hidden" name="out_type" value="报损出库">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label class="form-label">备注</label>
+                                <input type="text" name="remark" class="form-control form-control-sm" placeholder="请输入">
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-warning btn-sm"><i class="bi bi-box-arrow-up"></i> 提交出库</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 库存变动日志 -->
+        <div class="card-custom">
+            <div class="card-header-custom">📋 库存变动日志</div>
+            <div class="card-body-custom p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped table-sm mb-0">
+                        <thead class="table-light">
+                            <tr><th>药品ID</th><th>变动类型</th><th>变动数量</th><th>变动前</th><th>变动后</th><th>门店</th><th>操作人</th><th>备注</th><th>时间</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs %}
+                            <tr>
+                                <td>{{ log.medicine_id }}</td>
+                                <td>{{ log.change_type }}</td>
+                                <td>{{ log.change_qty }}</td>
+                                <td>{{ log.before_stock }}</td>
+                                <td>{{ log.after_stock }}</td>
+                                <td>{{ log.store_name }}</td>
+                                <td>{{ log.operator_name }}</td>
+                                <td>{{ log.remark }}</td>
+                                <td>{{ log.created_at.strftime('%Y-%m-%d %H:%M') if log.created_at else '' }}</td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="9" class="text-center">暂无记录</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 药品搜索模态框 -->
+<div class="modal fade" id="medicineSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">选择药品</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" id="modal_search_input" class="form-control" placeholder="输入药品名称/编码/厂家">
+                    <button class="btn btn-primary" id="modal_search_btn">搜索</button>
+                </div>
+                <div style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-sm table-hover">
+                        <thead class="table-light">
+                            <tr><th>编码</th><th>名称</th><th>厂家</th><th>售价</th><th>库存</th><th>操作</th></tr>
+                        </thead>
+                        <tbody id="modal_search_results">
+                            <tr><td colspan="6" class="text-center text-muted">请输入关键词搜索</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 药品详情模态框 -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white"><h5 class="modal-title">药品详情</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body" id="detailContent">加载中...</div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.3.0-alpha1/js/bootstrap.bundle.min.js"></script>
+<script>
+    // 药品搜索与选择逻辑
+    let currentSelectedMedicineId = null;
+    const keywordInput = document.getElementById('medicine_keyword');
+    const searchBtn = document.getElementById('search_medicine_btn');
+    const selectedMedicineIdInput = document.getElementById('selected_medicine_id');
+    const selectedInfoDiv = document.getElementById('selected_medicine_info');
+    const selectedNameSpan = document.getElementById('selected_medicine_name');
+    const detailBtn = document.getElementById('in_medicine_detail_btn');
+    const stockInForm = document.getElementById('stockInForm');
+
+    // 模态框元素
+    const modal = new bootstrap.Modal(document.getElementById('medicineSearchModal'));
+    const modalSearchInput = document.getElementById('modal_search_input');
+    const modalSearchBtn = document.getElementById('modal_search_btn');
+    const modalResultsBody = document.getElementById('modal_search_results');
+
+    // 打开模态框并搜索
+    function openSearchModal(keyword) {
+        modal.show();
+        if (keyword) {
+            modalSearchInput.value = keyword;
+            performSearch(keyword);
+        } else {
+            modalSearchInput.value = '';
+            modalResultsBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">请输入关键词搜索</td></tr>';
+        }
+    }
+
+    // 执行搜索
+    async function performSearch(keyword) {
+        if (!keyword.trim()) {
+            modalResultsBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">请输入关键词</td></tr>';
+            return;
+        }
+        modalResultsBody.innerHTML = '<tr><td colspan="6" class="text-center">搜索中...</td></tr>';
+        try {
+            const resp = await fetch(`/api/medicines/search?keyword=${encodeURIComponent(keyword)}`);
+            const data = await resp.json();
+            if (data.length === 0) {
+                modalResultsBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">未找到相关药品</td></tr>';
+                return;
+            }
+            let html = '';
+            data.forEach(med => {
+                html += `
+                    <tr>
+                        <td>${med.code}</td>
+                        <td>${med.name}</td>
+                        <td>${med.manufacturer || '-'}</td>
+                        <td>¥${med.price}</td>
+                        <td>${med.stock}</td>
+                        <td><button class="btn btn-sm btn-outline-primary select-medicine" data-id="${med.id}" data-name="${med.name}">选择</button></td>
+                    </tr>
+                `;
+            });
+            modalResultsBody.innerHTML = html;
+            document.querySelectorAll('.select-medicine').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = btn.getAttribute('data-id');
+                    const name = btn.getAttribute('data-name');
+                    selectMedicine(id, name);
+                    modal.hide();
+                });
+            });
+        } catch (err) {
+            console.error(err);
+            modalResultsBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">加载失败</td></tr>';
+        }
+    }
+
+    // 选择药品
+    function selectMedicine(id, name) {
+        currentSelectedMedicineId = id;
+        selectedMedicineIdInput.value = id;
+        selectedNameSpan.innerText = name;
+        selectedInfoDiv.style.display = 'block';
+        detailBtn.style.display = 'inline-block';
+        keywordInput.value = name;
+    }
+
+    // 搜索按钮事件
+    searchBtn.addEventListener('click', () => {
+        const kw = keywordInput.value.trim();
+        openSearchModal(kw);
+    });
+
+    // 模态框内搜索
+    modalSearchBtn.addEventListener('click', () => {
+        const kw = modalSearchInput.value.trim();
+        performSearch(kw);
+    });
+    modalSearchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            performSearch(modalSearchInput.value.trim());
+        }
+    });
+    keywordInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchBtn.click();
+        }
+    });
+
+    // 查看详情
+    detailBtn.addEventListener('click', function() {
+        if (!currentSelectedMedicineId) {
+            alert('请先选择药品');
+            return;
+        }
+        const modalDetail = new bootstrap.Modal(document.getElementById('detailModal'));
+        const contentDiv = document.getElementById('detailContent');
+        contentDiv.innerHTML = '加载中...';
+        fetch(`/medicine/${currentSelectedMedicineId}?json=1`)
+            .then(res => res.json())
+            .then(data => {
+                let html = `<table class="table table-bordered">
+                    <tr><th>编码</th><td>${data.code || '-'}</td><th>名称</th><td>${data.name || '-'}</td></tr>
+                    <tr><th>通用名</th><td>${data.generic_name || '-'}</td><th>分类</th><td>${data.category_name || '-'}</td></tr>
+                    <tr><th>规格</th><td>${data.spec || '-'}</td><th>单位</th><td>${data.unit || '-'}</td></tr>
+                    <tr><th>厂家</th><td>${data.manufacturer || '-'}</td><th>批准文号</th><td>${data.approval_no || '-'}</td></tr>
+                    <tr><th>处方类型</th><td>${data.is_rx ? '处方药' : '非处方药'}</td><th>进货价</th><td>¥${data.purchase_price || 0}</td></tr>
+                    <tr><th>售价</th><td>¥${data.price || 0}</td><th>当前库存</th><td>${data.stock || 0}</td></tr>
+                    <tr><th>预警库存</th><td>${data.warning_stock || 0}</td><th>门店</th><td>${data.store_name || '-'}</td></tr>
+                    <tr><th>描述</th><td colspan="3">${data.description || '-'}</td></tr>
+                    <tr><th>用法用量</th><td colspan="3">${data.usage_method || '-'}</td></tr>
+                    <tr><th>不良反应</th><td colspan="3">${data.adverse_reaction || '-'}</td></tr>
+                    <tr><th>贮藏条件</th><td colspan="3">${data.storage_condition || '-'}</td></tr>
+                </table>`;
+                contentDiv.innerHTML = html;
+                modalDetail.show();
+            })
+            .catch(() => { contentDiv.innerHTML = '<div class="alert alert-danger">加载失败</div>'; modalDetail.show(); });
+    });
+
+    // 表单提交校验
+    stockInForm.addEventListener('submit', function(e) {
+        if (!selectedMedicineIdInput.value) {
+            e.preventDefault();
+            alert('请先搜索并选择药品');
+        }
+    });
+</script>
+</body>
+</html>

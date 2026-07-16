@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mt-3"><i class="bi bi-people"></i> 用户管理</h2>
+
+<div class="row mt-3">
+    <div class="col-md-5">
+        <form method="get" class="d-flex">
+            <select name="store_name" class="form-select me-2" onchange="this.form.submit()">
+                <option value="">所有门店</option>
+                {% for s in stores %}
+                <option value="{{ s.pharmacy_name }}" {% if current_store == s.pharmacy_name %}selected{% endif %}>{{ s.pharmacy_name }}</option>
+                {% endfor %}
+            </select>
+            <input type="text" name="keyword" class="form-control" placeholder="用户名/姓名" value="{{ keyword }}">
+            <button class="btn btn-primary ms-2"><i class="bi bi-search"></i></button>
+        </form>
+    </div>
+    <div class="col-7 text-end">
+        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#userModal" onclick="resetForm()"><i class="bi bi-plus-circle"></i> 新增用户</button>
+    </div>
+</div>
+
+<table class="table table-hover mt-3">
+    <thead class="table-light">
+        <tr><th>ID</th><th>用户名</th><th>角色</th><th>姓名</th><th>电话</th><th>门店</th><th>状态</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+        {% for u in users %}
+        <tr>
+            <td>{{ u.id }}</td><td>{{ u.username }}</td><td>{{ u.role }}</td>
+            <td>{{ u.real_name }}</td><td>{{ u.phone }}</td><td>{{ u.store_name }}</td>
+            <td>{% if u.is_active %}启用{% else %}禁用{% endif %}</td>
+            <td>
+                <button class="btn btn-sm btn-warning" onclick='editUser({{ u | tojson }})' data-bs-toggle="modal" data-bs-target="#userModal">编辑</button>
+                <a href="{{ url_for('delete_user', uid=u.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('确定删除？')">删除</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% include '_pagination.html' %}
+
+<div class="modal fade" id="userModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <form id="userForm" method="post" action="{{ url_for('add_user') }}">
+            <div class="modal-header"><h5 id="modalTitle">新增用户</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="hidden" name="id" id="userId">
+                <div class="mb-3"><label>用户名</label><input type="text" name="username" class="form-control" required></div>
+                <div class="mb-3">
+                    <label>密码</label>
+                    <input type="text" name="password" id="passwordInput" class="form-control" required oninput="checkPasswordStrength(this.value)">
+                    <div id="passwordStrength" class="mt-1" style="display:none;">
+                        <div class="progress" style="height:6px;">
+                            <div id="strengthBar" class="progress-bar" role="progressbar" style="width:0%;"></div>
+                        </div>
+                        <small id="strengthText" class="mt-1"></small>
+                        <ul id="strengthRules" class="list-unstyled small mt-1 mb-0" style="font-size:12px;line-height:1.6;"></ul>
+                    </div>
+                </div>
+                <div class="mb-3"><label>角色</label>
+                    <select name="role" class="form-select" id="userRole">
+                        <option value="系统管理员">系统管理员</option>
+                        <option value="药房管理员">药房管理员</option>
+                        <option value="销售员" selected>销售员</option>
+                    </select>
+                </div>
+                <div class="mb-3"><label>姓名</label><input type="text" name="real_name" class="form-control"></div>
+                <div class="mb-3"><label>电话</label><input type="text" name="phone" class="form-control"></div>
+                <div class="mb-3"><label>门店</label>
+                    <select name="store_name" class="form-select" id="storeName">
+                        <option value="">请选择门店</option>
+                        <option value="">无门店</option>
+                        {% for s in stores %}
+                        <option value="{{ s.pharmacy_name }}">{{ s.pharmacy_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3"><label>启用</label>
+                    <select name="is_active" class="form-select">
+                        <option value="1">是</option><option value="0">否</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer"><button type="submit" class="btn btn-primary">保存</button></div>
+        </form>
+    </div></div>
+</div>
+
+<script>
+function resetForm() {
+    document.getElementById('userForm').action = "{{ url_for('add_user') }}";
+    document.getElementById('modalTitle').innerText = '新增用户';
+    document.getElementById('userId').value = '';
+    document.getElementById('userForm').reset();
+    document.getElementById('storeName').value = '';
+}
+function editUser(user) {
+    document.getElementById('userForm').action = "{{ url_for('edit_user', uid=0) }}".replace('0', user.id);
+    document.getElementById('modalTitle').innerText = '编辑用户';
+    document.getElementById('userId').value = user.id;
+    document.querySelector('[name="username"]').value = user.username;
+    document.querySelector('[name="password"]').value = '';
+    document.querySelector('[name="role"]').value = user.role;
+    document.querySelector('[name="real_name"]').value = user.real_name || '';
+    document.querySelector('[name="phone"]').value = user.phone || '';
+    document.querySelector('[name="store_name"]').value = user.store_name || '';
+    document.querySelector('[name="is_active"]').value = user.is_active ? '1' : '0';
+    document.getElementById('passwordStrength').style.display = 'none';
+}
+function checkPasswordStrength(pwd) {
+    var container = document.getElementById('passwordStrength');
+    var bar = document.getElementById('strengthBar');
+    var text = document.getElementById('strengthText');
+    var rules = document.getElementById('strengthRules');
+    container.style.display = pwd ? 'block' : 'none';
+    if (!pwd) return;
+    var hasUpper = /[A-Z]/.test(pwd);
+    var hasLower = /[a-z]/.test(pwd);
+    var hasDigit = /\d/.test(pwd);
+    var hasSpecial = /[^A-Za-z0-9]/.test(pwd);
+    var longEnough = pwd.length >= 8;
+    var categories = (hasUpper ? 1 : 0) + (hasLower ? 1 : 0) + (hasDigit ? 1 : 0) + (hasSpecial ? 1 : 0);
+    var score = (longEnough ? 1 : 0) + categories;
+    var pct = Math.min(100, Math.round(score / 6 * 100));
+    bar.style.width = pct + '%';
+    var rulesHtml = '';
+    rulesHtml += '<li>' + (longEnough ? '<span class="text-success">&#10003;</span>' : '<span class="text-muted">&#10007;</span>') + ' 至少8位</li>';
+    rulesHtml += '<li>' + (hasUpper ? '<span class="text-success">&#10003;</span>' : '<span class="text-muted">&#10007;</span>') + ' 大写字母</li>';
+    rulesHtml += '<li>' + (hasLower ? '<span class="text-success">&#10003;</span>' : '<span class="text-muted">&#10007;</span>') + ' 小写字母</li>';
+    rulesHtml += '<li>' + (hasDigit ? '<span class="text-success">&#10003;</span>' : '<span class="text-muted">&#10007;</span>') + ' 数字</li>';
+    rulesHtml += '<li>' + (hasSpecial ? '<span class="text-success">&#10003;</span>' : '<span class="text-muted">&#10007;</span>') + ' 特殊字符</li>';
+    rules.innerHTML = rulesHtml;
+    if (categories < 3 || !longEnough) {
+        bar.className = 'progress-bar bg-danger';
+        text.innerHTML = '弱：至少满足3类字符且长度≥8';
+        text.className = 'text-danger small';
+    } else if (categories === 3) {
+        bar.className = 'progress-bar bg-warning';
+        text.innerHTML = '中：符合基本要求';
+        text.className = 'text-warning small';
+    } else {
+        bar.className = 'progress-bar bg-success';
+        text.innerHTML = '强：密码强度高';
+        text.className = 'text-success small';
+    }
+}
+</script>
+{% endblock %}

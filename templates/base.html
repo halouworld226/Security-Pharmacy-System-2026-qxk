@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>连锁药房管理系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% if current_user %}
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+                <i class="bi bi-capsule"></i> 药房管理系统
+            </a>
+            <div class="navbar-nav ms-auto">
+                <span class="navbar-text me-3">
+                    {{ current_user.real_name }} ({{ current_user.role }}) | {{ current_user.store_name }}
+                </span>
+                <a class="nav-link" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right"></i> 退出</a>
+            </div>
+        </div>
+    </nav>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- 侧边栏 -->
+            <nav class="col-md-2 d-md-block bg-light sidebar">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        {% if current_user.role == '系统管理员' %}
+                        <!-- 系统管理员菜单 -->
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('charts_page') }}"><i class="bi bi-graph-up"></i> 总体分析</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('medicine_overview') }}"><i class="bi bi-eye"></i> 药品总览</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('users') }}"><i class="bi bi-people"></i> 用户管理</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('stores_page') }}"><i class="bi bi-shop"></i> 门店管理</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('security_dashboard') }}"><i class="bi bi-shield-shaded"></i> 安全看板</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('logs') }}"><i class="bi bi-journal-text"></i> 审计日志</a></li>
+                        {% elif current_user.role == '药房管理员' %}
+                        <!-- 药房管理员菜单 -->
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}"><i class="bi bi-speedometer2"></i> 仪表盘</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('medicines') }}"><i class="bi bi-capsule"></i> 药品管理</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('stock_io') }}"><i class="bi bi-box-seam"></i> 出入库</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('inventory_warning') }}"><i class="bi bi-exclamation-triangle"></i> 库存预警</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('transfer') }}"><i class="bi bi-send"></i> 调拨申请</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('price_requests') }}"><i class="bi bi-pencil-square"></i> 价格申请</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('categories_suppliers') }}"><i class="bi bi-diagram-3"></i> 基础资料</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('suggestions') }}"><i class="bi bi-lightbulb"></i> 药品建议</a></li>
+                        {% elif current_user.role == '销售员' %}
+                        <!-- 销售员菜单 -->
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('sale') }}"><i class="bi bi-cart"></i> 销售开单</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('sales_orders') }}"><i class="bi bi-receipt"></i> 我的销售</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('returns') }}"><i class="bi bi-arrow-return-left"></i> 退货处理</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('charts_page') }}"><i class="bi bi-bar-chart"></i> 图表分析</a></li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </nav>
+            <!-- 主要内容区 -->
+            <main class="col-md-10 ms-sm-auto px-md-4">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} alert-dismissible fade show mt-3" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+    {% else %}
+    {% block full_content %}{% endblock %}
+    {% endif %}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{{ url_for('static', filename='js/site.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

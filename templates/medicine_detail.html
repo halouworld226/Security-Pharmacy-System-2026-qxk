@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mt-3"><i class="bi bi-info-circle"></i> 药品详情</h2>
+<div class="card mt-3">
+    <div class="row g-0">
+        <div class="col-md-4 p-4 text-center bg-light">
+            {% if med.image_path %}
+            <img src="{{ med.image_path }}" class="img-fluid rounded" style="max-height: 300px;">
+            {% else %}
+            <i class="bi bi-capsule" style="font-size: 8rem; color: #aaa;"></i>
+            {% endif %}
+        </div>
+        <div class="col-md-8">
+            <div class="card-body">
+                <h3>{{ med.name }}</h3>
+                <p class="text-secondary">{{ med.generic_name }}</p>
+                <hr>
+                <table class="table table-borderless">
+                    <tr><th width="150">编码</th><td>{{ med.code }}</td></tr>
+                    <tr><th>分类</th><td>{{ med.category_name }}</td></tr>
+                    <tr><th>规格</th><td>{{ med.spec }} / {{ med.unit }}</td></tr>
+                    <tr><th>厂家</th><td>{{ med.manufacturer }}</td></tr>
+                    <tr><th>批准文号</th><td>{{ med.approval_no }}</td></tr>
+                    <tr><th>处方药</th><td>{% if med.is_rx %}是{% else %}否{% endif %}</td></tr>
+                    <tr><th>价格</th><td>¥ {{ med.price }}</td></tr>
+                    <tr><th>库存</th><td>{{ med.stock }} (预警: {{ med.warning_stock }})</td></tr>
+                    <tr><th>门店</th><td>{{ med.store_name }}</td></tr>
+                    <tr><th>说明</th><td>{{ med.description or '无' }}</td></tr>
+                    <tr><th>用法用量</th><td>{{ med.usage_method or '无' }}</td></tr>
+                    <tr><th>不良反应</th><td>{{ med.adverse_reaction or '无' }}</td></tr>
+                    <tr><th>储存条件</th><td>{{ med.storage_condition or '无' }}</td></tr>
+                </table>
+                <a href="{{ url_for('medicines') }}" class="btn btn-secondary">返回列表</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

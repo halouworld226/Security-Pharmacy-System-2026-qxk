@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block full_content %}
+<div class="container-fluid vh-100 d-flex align-items-center" style="background: linear-gradient(135deg, #e0f2fe 0%, #ccfbf1 100%);">
+    <div class="row w-100 justify-content-center">
+        <div class="col-md-9 col-lg-7">
+            <div class="card shadow-lg border-0 overflow-hidden" style="border-radius: 1.2rem;">
+                <div class="row g-0">
+                    <!-- 左侧插画区：所有文字和图标强制白色，字体进一步缩小 -->
+                    <div class="col-md-5 text-white d-flex flex-column justify-content-center p-3" style="background: linear-gradient(145deg, #0f766e, #14b8a6);">
+                        <div class="text-center mb-2">
+                            <i class="bi bi-capsule" style="font-size: 2rem; color: #ffffff;"></i>
+                            <i class="bi bi-heart-pulse" style="font-size: 1.5rem; margin-left: 6px; color: #ffffff;"></i>
+                        </div>
+                        <h5 class="fw-semibold text-center mb-1" style="color: #ffffff;">智慧药房</h5>
+                        <p class="text-center small mb-3" style="color: #ffffff;">连锁管理 · 精准库存 · 安全合规</p>
+                        <div class="row text-center g-0">
+                            <div class="col-4">
+                                <i class="bi bi-shield-check" style="font-size: 1.1rem; color: #ffffff;"></i>
+                                <p class="small mb-0" style="color: #ffffff;">药品追溯</p>
+                            </div>
+                            <div class="col-4">
+                                <i class="bi bi-graph-up" style="font-size: 1.1rem; color: #ffffff;"></i>
+                                <p class="small mb-0" style="color: #ffffff;">销售分析</p>
+                            </div>
+                            <div class="col-4">
+                                <i class="bi bi-bell" style="font-size: 1.1rem; color: #ffffff;"></i>
+                                <p class="small mb-0" style="color: #ffffff;">智能预警</p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 右侧登录表单（保持深色文字，清晰可见） -->
+                    <div class="col-md-7 p-4 bg-white">
+                        <h4 class="fw-semibold text-primary text-center mb-2">登录系统</h4>
+                        <p class="text-secondary text-center small mb-3">请使用您的账号密码及对应角色</p>
+
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                            {% if messages %}
+                                {% for category, message in messages %}
+                                    <div class="alert alert-{{ category }} py-2 small alert-dismissible fade show" role="alert">
+                                        {{ message }}
+                                        <button type="button" class="btn-close p-2" data-bs-dismiss="alert"></button>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+
+                        <form method="post">
+                            {% if locked_remaining %}
+                            <div id="lockoutCountdown" class="alert alert-danger py-2 small text-center mb-3">
+                                <i class="bi bi-lock-fill me-1"></i>
+                                账户已锁定，剩余 <span id="countdownTimer">{{ locked_remaining }}</span> 秒后自动解锁
+                            </div>
+                            {% endif %}
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold">用户名</label>
+                                <input type="text" name="username" class="form-control form-control-sm" placeholder="请输入用户名" value="{{ request.form.username or '' }}" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold">密码</label>
+                                <input type="password" name="password" class="form-control form-control-sm" placeholder="请输入密码" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold">角色</label>
+                                <select name="role" class="form-select form-select-sm" required>
+                                    <option value="">-- 选择身份 --</option>
+                                    <option value="系统管理员" {% if request.form.role == '系统管理员' %}selected{% endif %}>系统管理员</option>
+                                    <option value="药房管理员" {% if request.form.role == '药房管理员' %}selected{% endif %}>药房管理员</option>
+                                    <option value="销售员" {% if request.form.role == '销售员' %}selected{% endif %}>销售员</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold">验证码</label>
+                                <div class="d-flex gap-2">
+                                    <input type="text" name="captcha" class="form-control form-control-sm" placeholder="请输入验证码" required autocomplete="off" style="text-transform:uppercase;letter-spacing:3px;">
+                                    <img src="{{ url_for('captcha_image') }}" id="loginCaptchaImg" style="height:31px;border:1px solid #ddd;border-radius:4px;cursor:pointer;" onclick="this.src='{{ url_for('captcha_image') }}?'+Date.now()" title="点击刷新">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100 btn-sm py-2 fw-semibold">
+                                <i class="bi bi-box-arrow-in-right me-1"></i>登录
+                            </button>
+                        </form>
+                        <p class="text-center text-secondary small mt-3 mb-0">
+                            <i class="bi bi-shield-shaded me-1"></i>受保护的医疗信息系统
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% if locked_remaining %}
+<script>
+(function() {
+    var remaining = {{ locked_remaining }};
+    var containerEl = document.getElementById('lockoutCountdown');
+    if (!containerEl) return;
+    function updateCountdown() {
+        remaining--;
+        if (remaining <= 0) {
+            containerEl.innerHTML = '<i class="bi bi-unlock-fill me-1"></i> 账户已解锁，请重新登录';
+            containerEl.className = 'alert alert-success py-2 small text-center mb-3';
+            return;
+        }
+        var m = Math.floor(remaining / 60);
+        var s = remaining % 60;
+        containerEl.innerHTML = '<i class="bi bi-lock-fill me-1"></i> 账户已锁定，剩余 <span id="countdownTimer">' + remaining + '</span> 秒后自动解锁（' + m + '分' + s + '秒）';
+    }
+    setInterval(updateCountdown, 1000);
+})();
+</script>
+{% endif %}
+{% endblock %}

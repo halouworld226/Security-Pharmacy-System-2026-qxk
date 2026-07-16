@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mt-3"><i class="bi bi-arrow-return-left"></i> 退货处理</h2>
+
+<div class="card mt-3">
+    <div class="card-header">提交退货</div>
+    <div class="card-body">
+        <!-- 订单查询区域 -->
+        <div class="row g-2 mb-3">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <input type="text" id="sale_order_no" class="form-control" placeholder="请输入原销售单号" required>
+                    <button class="btn btn-primary" id="query_order_btn">查询订单</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 订单详情显示区域 (默认隐藏) -->
+        <div id="order_detail" style="display: none;">
+            <div class="alert alert-info mb-3">
+                <div class="row">
+                    <div class="col-md-4"><strong>订单号:</strong> <span id="order_no_display"></span></div>
+                    <div class="col-md-4"><strong>下单时间:</strong> <span id="order_time"></span></div>
+                    <div class="col-md-4"><strong>订单总金额:</strong> ¥<span id="order_total"></span></div>
+                </div>
+            </div>
+
+            <h6 class="mb-2">订单药品列表</h6>
+            <div class="table-responsive mb-3">
+                <table class="table table-bordered table-sm">
+                    <thead>
+                        <tr>
+                            <th width="5%">选择</th>
+                            <th width="15%">药品编码</th>
+                            <th width="30%">药品名称</th>
+                            <th width="15%">单价(¥)</th>
+                            <th width="15%">已售数量</th>
+                            <th width="20%">退货数量</th>
+                        </tr>
+                    </thead>
+                    <tbody id="order_items_body">
+                        <!-- 动态生成 -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="row g-2">
+                <div class="col-md-10">
+                    <input type="text" id="return_reason" class="form-control" placeholder="请输入退货原因">
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-warning w-100" id="submit_return_btn">提交退货</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 原表单 (保留作为备用，可隐藏) -->
+        <div id="old_form" style="display: none;">
+            <form method="post" action="{{ url_for('create_return') }}">
+                <div class="row g-2">
+                    <div class="col-md-3"><input type="text" name="sale_order_no" class="form-control" placeholder="原销售单号" required></div>
+                    <div class="col-md-2"><input type="number" name="medicine_id" class="form-control" placeholder="药品ID" required></div>
+                    <div class="col-md-2"><input type="number" name="quantity" class="form-control" placeholder="退货数量" required></div>
+                    <div class="col-md-3"><input type="text" name="reason" class="form-control" placeholder="原因"></div>
+                    <div class="col-md-2"><button class="btn btn-warning w-100">提交退货</button></div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<table class="table mt-3">
+    <thead><tr><th>退货单号</th><th>原销售单</th><th>退款金额</th><th>销售操作人</th><th>退货操作人</th><th>时间</th></tr></thead>
+    <tbody>
+        {% for r in returns %}
+        <tr>
+            <td><a href="javascript:void(0)" class="return-detail-link" data-return-no="{{ r.order_no }}">{{ r.order_no }}</a></td>
+            <td>{{ r.sale_order_no }}</td>
+            <td>{{ r.total_refund_amount }}</td>
+            <td>{{ r.sales_operator or '-' }}</td>
+            <td>{{ r.operator_name }}</td>
+            <td>{{ r.created_at }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- 退货详情模态框 -->
+<div class="modal fade" id="returnDetailModal" tabindex="-1" aria-labelledby="returnDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="returnDetailModalLabel">退货详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info mb-3">
+                    <div class="row">
+                        <div class="col-md-4"><strong>退货单号:</strong> <span id="modal_return_no"></span></div>
+                        <div class="col-md-4"><strong>原销售单:</strong> <span id="modal_sale_no"></span></div>
+                        <div class="col-md-4"><strong>总退款金额:</strong> ¥<span id="modal_total_refund"></span></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-3"><strong>销售操作人:</strong> <span id="modal_sales_operator"></span></div>
+                        <div class="col-md-3"><strong>退货操作人:</strong> <span id="modal_operator"></span></div>
+                        <div class="col-md-3"><strong>门店:</strong> <span id="modal_store"></span></div>
+                        <div class="col-md-3"><strong>退货时间:</strong> <span id="modal_time"></span></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-12"><strong>退货原因:</strong> <span id="modal_reason"></span></div>
+                    </div>
+                </div>
+
+                <h6 class="mb-2">退货药品明细</h6>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm">
+                        <thead>
+                            <tr>
+                                <th width="15%">药品编码</th>
+                                <th width="35%">药品名称</th>
+                                <th width="15%">单价(¥)</th>
+                                <th width="15%">退货数量</th>
+                                <th width="20%">退款金额(¥)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modal_items_body">
+                            <!-- 动态生成 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // 查询订单按钮点击事件
+    $('#query_order_btn').click(function() {
+        const orderNo = $('#sale_order_no').val().trim();
+        if (!orderNo) {
+            alert('请输入销售单号');
+            return;
+        }
+
+        // 发送AJAX请求查询订单
+        $.get(`/api/sale_order/${orderNo}`, function(res) {
+            if (res.success) {
+                // 填充订单基本信息
+                $('#order_no_display').text(res.order.order_no);
+                $('#order_time').text(res.order.created_at);
+                $('#order_total').text(res.order.total_amount);
+
+                // 生成药品列表
+                let html = '';
+                res.items.forEach(function(item) {
+                    html += `
+                        <tr data-medicine-id="${item.medicine_id}">
+                            <td>
+                                <input type="checkbox" class="return-checkbox"
+                                       data-medicine-id="${item.medicine_id}">
+                            </td>
+                            <td>${item.code}</td>
+                            <td>${item.name}</td>
+                            <td>${item.unit_price}</td>
+                            <td>${item.sold_quantity}</td>
+                            <td>
+                                <input type="number" class="form-control form-control-sm return-quantity"
+                                       min="1" max="${item.sold_quantity}" value="1" disabled>
+                            </td>
+                        </tr>
+                    `;
+                });
+                $('#order_items_body').html(html);
+
+                // 显示订单详情区域
+                $('#order_detail').show();
+
+                // 绑定复选框事件
+                $('.return-checkbox').change(function() {
+                    const medicineId = $(this).data('medicine-id');
+                    const quantityInput = $(`tr[data-medicine-id="${medicineId}"] .return-quantity`);
+                    quantityInput.prop('disabled', !$(this).is(':checked'));
+                });
+            } else {
+                alert(res.message);
+                $('#order_detail').hide();
+            }
+        }).fail(function(xhr) {
+            alert('查询失败: ' + (xhr.responseJSON?.message || '服务器错误'));
+            $('#order_detail').hide();
+        });
+    });
+
+    // 提交退货按钮点击事件
+    $('#submit_return_btn').click(function() {
+        const saleOrderNo = $('#sale_order_no').val().trim();
+        const reason = $('#return_reason').val().trim();
+
+        // 收集选中的退货药品
+        const items = [];
+        $('.return-checkbox:checked').each(function() {
+            const medicineId = $(this).data('medicine-id');
+            const quantity = parseInt($(`tr[data-medicine-id="${medicineId}"] .return-quantity`).val());
+
+            if (quantity > 0) {
+                items.push({
+                    medicine_id: medicineId,
+                    quantity: quantity
+                });
+            }
+        });
+
+        // 表单验证
+        if (items.length === 0) {
+            alert('请至少选择一种药品并输入退货数量');
+            return;
+        }
+
+        if (!reason) {
+            alert('请输入退货原因');
+            return;
+        }
+
+        // 发送AJAX请求提交退货
+        $.ajax({
+            url: '/return/create',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                sale_order_no: saleOrderNo,
+                items: items,
+                reason: reason
+            }),
+            success: function(res) {
+                if (res.success) {
+                    alert(res.message);
+                    // 刷新页面显示新的退货记录
+                    location.reload();
+                } else {
+                    alert(res.message);
+                }
+            },
+            error: function(xhr) {
+                alert('退货失败: ' + (xhr.responseJSON?.message || '服务器错误'));
+            }
+        });
+    });
+
+    // 回车键支持
+    $('#sale_order_no').keypress(function(e) {
+        if (e.which === 13) {
+            $('#query_order_btn').click();
+        }
+    });
+
+    // 退货详情链接点击事件
+    $('.return-detail-link').click(function() {
+        const returnNo = $(this).data('return-no');
+
+        // 发送AJAX请求获取退货详情
+        $.get(`/api/return_order_detail/${returnNo}`, function(res) {
+            if (res.success) {
+                // 填充模态框基本信息
+                $('#modal_return_no').text(res.return_order.order_no);
+                $('#modal_sale_no').text(res.return_order.sale_order_no);
+                $('#modal_total_refund').text(res.return_order.total_refund_amount);
+                $('#modal_sales_operator').text(res.return_order.sales_operator || '-');
+                $('#modal_operator').text(res.return_order.operator_name);
+                $('#modal_store').text(res.return_order.store_name);
+                $('#modal_time').text(res.return_order.created_at);
+                $('#modal_reason').text(res.return_order.reason);
+
+                // 生成药品明细
+                let html = '';
+                res.items.forEach(function(item) {
+                    html += `
+                        <tr>
+                            <td>${item.code}</td>
+                            <td>${item.medicine_name}</td>
+                            <td>${item.unit_price}</td>
+                            <td>${item.quantity}</td>
+                            <td>${item.refund_amount}</td>
+                        </tr>
+                    `;
+                });
+                $('#modal_items_body').html(html);
+
+                // 显示模态框
+                $('#returnDetailModal').modal('show');
+            } else {
+                alert(res.message);
+            }
+        }).fail(function(xhr) {
+            alert('获取退货详情失败: ' + (xhr.responseJSON?.message || '服务器错误'));
+        });
+    });
+});
+</script>
+{% endblock %}

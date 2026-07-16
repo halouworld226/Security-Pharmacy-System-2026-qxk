@@ -1,0 +1,25 @@
+{% if total > page_size %}
+<nav aria-label="Page navigation">
+    <ul class="pagination justify-content-center">
+        {% if page > 1 %}
+        <li class="page-item"><a class="page-link" href="?page={{ page-1 }}{% for key, value in request.args.items() if key != 'page' %}&{{ key }}={{ value }}{% endfor %}">上一页</a></li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">上一页</span></li>
+        {% endif %}
+
+        {% set start_page = [page-2, 1]|max %}
+        {% set end_page = [page+2, ((total-1)//page_size)+1]|min %}
+        {% for p in range(start_page, end_page+1) %}
+        <li class="page-item {% if p == page %}active{% endif %}">
+            <a class="page-link" href="?page={{ p }}{% for key, value in request.args.items() if key != 'page' %}&{{ key }}={{ value }}{% endfor %}">{{ p }}</a>
+        </li>
+        {% endfor %}
+
+        {% if page < ((total-1)//page_size)+1 %}
+        <li class="page-item"><a class="page-link" href="?page={{ page+1 }}{% for key, value in request.args.items() if key != 'page' %}&{{ key }}={{ value }}{% endfor %}">下一页</a></li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">下一页</span></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}

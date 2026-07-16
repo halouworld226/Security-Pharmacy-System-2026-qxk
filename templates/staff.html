@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>销售员端</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar">
+        <h2>销售员端</h2>
+        <p>欢迎：{{ user.real_name }}</p>
+        <ul>
+            <li onclick="showTab('saleTab')">药品销售</li>
+            <li onclick="showTab('orderTab')">销售记录</li>
+            <li onclick="showTab('suggestionTab')">提交药品意见</li>
+            <li onclick="showTab('mySuggestionTab')">我的意见</li>
+        </ul>
+        <a class="logout-btn" href="/api/logout">退出登录</a>
+    </aside>
+
+    <main class="main">
+        <section id="saleTab" class="tab active">
+            <h2>药品销售</h2>
+            <div class="toolbar">
+                <input id="searchKeyword" placeholder="输入药品名称/生产厂商/药品编码">
+                <button class="btn primary" onclick="loadDrugs()">搜索</button>
+            </div>
+
+            <div class="two-col">
+                <div>
+                    <h3>药品列表</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>编码</th>
+                                <th>名称</th>
+                                <th>厂商</th>
+                                <th>价格</th>
+                                <th>库存</th>
+                                <th>处方药</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="drugTableBody"></tbody>
+                    </table>
+                </div>
+
+                <div>
+                    <h3>购物车</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>名称</th>
+                                <th>单价</th>
+                                <th>数量</th>
+                                <th>小计</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cartTableBody"></tbody>
+                    </table>
+                    <div class="cart-footer">
+                        <div>
+                            <strong>总金额：￥<span id="cartTotal">0</span></strong>
+                        </div>
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <select id="paymentMethod">
+                                <option value="现金">现金</option>
+                                <option value="微信">微信</option>
+                                <option value="支付宝">支付宝</option>
+                                <option value="银行卡">银行卡</option>
+                            </select>
+                            <button class="btn success" onclick="checkout()">结算</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="orderTab" class="tab">
+            <h2>销售记录</h2>
+            <button class="btn primary" onclick="loadSales()">刷新记录</button>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>销售单号</th>
+                        <th>销售员</th>
+                        <th>金额</th>
+                        <th>支付方式</th>
+                        <th>支付状态</th>
+                        <th>支付流水号</th>
+                        <th>状态</th>
+                        <th>时间</th>
+                    </tr>
+                </thead>
+                <tbody id="salesTableBody"></tbody>
+            </table>
+        </section>
+
+        <section id="suggestionTab" class="tab">
+            <h2>提交药品意见</h2>
+            <div class="form-grid">
+                <div class="form-item"><label>药品名称</label><input id="sg_drug_name"></div>
+                <div class="form-item"><label>药品类型</label><input id="sg_drug_type"></div>
+                <div class="form-item"><label>建议数量</label><input id="sg_quantity" type="number"></div>
+                <div class="form-item"><label>预估价格</label><input id="sg_price" type="number"></div>
+                <div class="form-item full-row"><label>意见原因</label><textarea id="sg_reason"></textarea></div>
+                <div class="form-item full-row"><label>供应商建议</label><input id="sg_supplier"></div>
+            </div>
+            <button class="btn primary" onclick="submitSuggestion()">提交意见</button>
+        </section>
+
+        <section id="mySuggestionTab" class="tab">
+            <h2>我的药品意见</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>药品名称</th>
+                        <th>类型</th>
+                        <th>数量</th>
+                        <th>预估价格</th>
+                        <th>状态</th>
+                        <th>回复内容</th>
+                        <th>回复时间</th>
+                        <th>提交时间</th>
+                    </tr>
+                </thead>
+                <tbody id="mySuggestionBody"></tbody>
+            </table>
+        </section>
+    </main>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+let cart = [];
+
+function showTab(tabId) {
+    document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    if (tabId === 'saleTab') loadDrugs();
+    if (tabId === 'orderTab') loadSales();
+    if (tabId === 'mySuggestionTab') loadMySuggestions();
+}
+
+async function loadDrugs() {
+    const keyword = document.getElementById('searchKeyword').value || '';
+    const res = await fetch('/api/drugs?keyword=' + encodeURIComponent(keyword));
+    const data = await res.json();
+    const tbody = document.getElementById('drugTableBody');
+    tbody.innerHTML = '';
+    data.data.forEach(d => {
+        tbody.innerHTML += `
+            <tr>
+                <td>${d.id}</td>
+                <td>${d.drug_code}</td>
+                <td>${d.drug_name}</td>
+                <td>${d.manufacturer || ''}</td>
+                <td>${d.price}</td>
+                <td>${d.stock}</td>
+                <td>${d.is_prescription ? '是' : '否'}</td>
+                <td>
+                    <button class="btn small primary" onclick='addToCart(${JSON.stringify(d)})'>加入购物车</button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+function addToCart(drug) {
+    if (drug.stock <= 0) {
+        alert('该药品库存不足');
+        return;
+    }
+
+    if (drug.is_prescription) {
+        const ok = confirm('该药品为处方药，作业演示中默认已通过申请，是否继续加入购物车？');
+        if (!ok) return;
+    }
+
+    const existing = cart.find(item => item.drug_id === drug.id);
+    if (existing) {
+        existing.quantity += 1;
+    } else {
+        cart.push({
+            drug_id: drug.id,
+            drug_name: drug.drug_name,
+            price: parseFloat(drug.price),
+            quantity: 1
+        });
+    }
+    renderCart();
+}
+
+function renderCart() {
+    const tbody = document.getElementById('cartTableBody');
+    tbody.innerHTML = '';
+    let total = 0;
+    cart.forEach((item, index) => {
+        const subtotal = item.price * item.quantity;
+        total += subtotal;
+        tbody.innerHTML += `
+            <tr>
+                <td>${item.drug_name}</td>
+                <td>${item.price}</td>
+                <td>
+                    <button class="btn small" onclick="changeQty(${index}, -1)">-</button>
+                    ${item.quantity}
+                    <button class="btn small" onclick="changeQty(${index}, 1)">+</button>
+                </td>
+                <td>${subtotal.toFixed(2)}</td>
+                <td><button class="btn small danger" onclick="removeCart(${index})">删除</button></td>
+            </tr>
+        `;
+    });
+    document.getElementById('cartTotal').innerText = total.toFixed(2);
+}
+
+function changeQty(index, diff) {
+    cart[index].quantity += diff;
+    if (cart[index].quantity <= 0) cart.splice(index, 1);
+    renderCart();
+}
+
+function removeCart(index) {
+    cart.splice(index, 1);
+    renderCart();
+}
+
+async function checkout() {
+    if (!cart.length) return alert('购物车为空');
+
+    const payment_method = document.getElementById('paymentMethod').value;
+
+    const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            cart_items: cart,
+            payment_method: payment_method
+        })
+    });
+    const data = await res.json();
+
+    if (data.code === 200) {
+        alert(
+            `结算成功\n` +
+            `销售单号：${data.sale_no}\n` +
+            `支付方式：${data.payment_method}\n` +
+            `支付状态：${data.payment_status}\n` +
+            `支付流水号：${data.payment_no}\n` +
+            `金额：￥${data.total}`
+        );
+        cart = [];
+        renderCart();
+        loadDrugs();
+        loadSales();
+    } else {
+        alert(data.msg);
+    }
+}
+
+async function loadSales() {
+    const res = await fetch('/api/sales');
+    const data = await res.json();
+    const tbody = document.getElementById('salesTableBody');
+    tbody.innerHTML = '';
+    data.data.forEach(s => {
+        tbody.innerHTML += `
+            <tr>
+                <td>${s.id}</td>
+                <td>${s.sale_no}</td>
+                <td>${s.staff_name || ''}</td>
+                <td>${s.total_amount}</td>
+                <td>${s.payment_method || ''}</td>
+                <td>${s.payment_status || ''}</td>
+                <td>${s.payment_no || ''}</td>
+                <td>${s.status}</td>
+                <td>${formatTime(s.created_at)}</td>
+            </tr>
+        `;
+    });
+}
+
+async function submitSuggestion() {
+    const payload = {
+        drug_name: document.getElementById('sg_drug_name').value,
+        drug_type: document.getElementById('sg_drug_type').value,
+        quantity: parseInt(document.getElementById('sg_quantity').value || 0),
+        estimated_price: parseFloat(document.getElementById('sg_price').value || 0),
+        reason: document.getElementById('sg_reason').value,
+        supplier_suggestion: document.getElementById('sg_supplier').value
+    };
+
+    if (!payload.drug_name || !payload.reason) {
+        alert('请至少填写药品名称和意见原因');
+        return;
+    }
+
+    const res = await fetch('/api/suggestions/add', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    alert(data.msg);
+    if (data.code === 200) {
+        ['sg_drug_name','sg_drug_type','sg_quantity','sg_price','sg_reason','sg_supplier'].forEach(id => {
+            document.getElementById(id).value = '';
+        });
+        loadMySuggestions();
+    }
+}
+
+async function loadMySuggestions() {
+    const res = await fetch('/api/suggestions');
+    const data = await res.json();
+    const tbody = document.getElementById('mySuggestionBody');
+    tbody.innerHTML = '';
+    data.data.forEach(s => {
+        tbody.innerHTML += `
+            <tr>
+                <td>${s.id}</td>
+                <td>${s.drug_name}</td>
+                <td>${s.drug_type || ''}</td>
+                <td>${s.quantity || ''}</td>
+                <td>${s.estimated_price || ''}</td>
+                <td>${s.status}</td>
+                <td>${s.admin_comment || (s.status === '待审批' ? '暂无回复' : '')}</td>
+                <td>${s.reviewed_at ? formatTime(s.reviewed_at) : ''}</td>
+                <td>${formatTime(s.created_at)}</td>
+            </tr>
+        `;
+    });
+}
+
+loadDrugs();
+loadSales();
+loadMySuggestions();
+</script>
+</body>
+</html>

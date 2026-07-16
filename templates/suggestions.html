@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mt-3"><i class="bi bi-lightbulb"></i> 药品建议管理</h2>
+
+{% if current_user.role == '销售员' %}
+<div class="card mt-3">
+    <div class="card-header">提交建议</div>
+    <div class="card-body">
+        <form method="post" action="{{ url_for('submit_suggestion') }}">
+            <div class="row g-2">
+                <div class="col-md-2"><input type="text" name="medicine_name" class="form-control" placeholder="药品名称" required></div>
+                <div class="col-md-2"><input type="text" name="medicine_type" class="form-control" placeholder="类型"></div>
+                <div class="col-md-1"><input type="number" name="suggest_qty" class="form-control" placeholder="数量" required></div>
+                <div class="col-md-2"><input type="number" step="0.01" name="estimate_price" class="form-control" placeholder="预估价格"></div>
+                <div class="col-md-2"><input type="text" name="reason" class="form-control" placeholder="原因"></div>
+                <div class="col-md-2"><input type="text" name="supplier_suggestion" class="form-control" placeholder="推荐供应商"></div>
+                <div class="col-md-1"><button class="btn btn-primary w-100">提交</button></div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div class="mt-3">
+    <a href="?status=全部" class="btn btn-outline-secondary {% if status=='全部' %}active{% endif %}">全部</a>
+    <a href="?status=待审批" class="btn btn-outline-warning {% if status=='待审批' %}active{% endif %}">待审批</a>
+    <a href="?status=已通过" class="btn btn-outline-success {% if status=='已通过' %}active{% endif %}">已通过</a>
+    <a href="?status=已驳回" class="btn btn-outline-danger {% if status=='已驳回' %}active{% endif %}">已驳回</a>
+</div>
+
+<table class="table mt-3">
+    <thead><tr><th>药品</th><th>建议数量</th><th>提交人</th><th>门店</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody>
+        {% for s in suggestions %}
+        <tr>
+            <td>{{ s.medicine_name }}</td><td>{{ s.suggest_qty }}</td><td>{{ s.submitter }}</td>
+            <td>{{ s.store_name }}</td><td>{{ s.status }}</td>
+            <td>
+                {% if current_user.role == '管理员' and s.status == '待审批' %}
+                <a href="{{ url_for('approve_suggestion', sid=s.id, passed=1) }}" class="btn btn-sm btn-success">通过</a>
+                <a href="{{ url_for('approve_suggestion', sid=s.id, passed=0) }}" class="btn btn-sm btn-danger">驳回</a>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block extra_css %}
+<style>
+    .sec-card { border-radius: 8px; border: none; box-shadow: 0 1px 4px rgba(0,0,0,0.05); background: #fff; }
+    .sec-stat { text-align: center; padding: 0.5rem 0.25rem; }
+    .sec-stat .value { font-size: 1.25rem; font-weight: 700; }
+    .sec-stat .label { font-size: 0.72rem; color: #6b7280; }
+    .sec-chart-box { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); padding: 8px 10px; }
+    .sec-chart-box h6 { font-size: 0.82rem; margin-bottom: 4px; }
+    .table-xs td, .table-xs th { font-size: 0.75rem; padding: 0.2rem 0.4rem; vertical-align: middle; }
+    .badge-danger-evt { background: #fee2e2; color: #dc2626; font-size: 0.68rem; }
+    .badge-warn-evt { background: #fef3c7; color: #d97706; font-size: 0.68rem; }
+    .badge-success-evt { background: #dcfce7; color: #16a34a; font-size: 0.68rem; }
+    .badge-info-evt { background: #e0f2fe; color: #0284c7; font-size: 0.68rem; }
+    .event-ip { font-family: monospace; font-size: 0.72rem; color: #6b7280; }
+    .evt-item { font-size: 0.75rem; }
+</style>
+{% endblock %}
+{% block content %}
+<h5 class="fw-semibold text-primary mt-1 mb-1"><i class="bi bi-shield-shaded me-2"></i>安全看板
+    <div class="btn-group btn-group-sm float-end">
+        <button class="btn btn-outline-primary active" style="font-size:0.72rem;" onclick="changeDays(1)">今日</button>
+        <button class="btn btn-outline-primary" style="font-size:0.72rem;" onclick="changeDays(7)">7天</button>
+        <button class="btn btn-outline-primary" style="font-size:0.72rem;" onclick="changeDays(30)">30天</button>
+    </div>
+</h5>
+
+<!-- 概览卡片 -->
+<div class="row g-1 mb-1" id="overviewCards"></div>
+
+<!-- 图表区 -->
+<div class="row g-1 mb-1">
+    <div class="col-md-6">
+        <div class="sec-chart-box">
+            <h6><i class="bi bi-graph-up me-1"></i>登录趋势</h6>
+            <div style="height:400px;"><canvas id="loginTrendChart"></canvas></div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="sec-chart-box">
+            <h6><i class="bi bi-pie-chart me-1"></i>操作类型分布</h6>
+            <div style="height:400px;"><canvas id="actionDistChart"></canvas></div>
+        </div>
+    </div>
+</div>
+
+<!-- 异常IP + 安全事件 -->
+<div class="row g-1">
+    <div class="col-md-6">
+        <div class="sec-chart-box">
+            <h6><i class="bi bi-exclamation-triangle text-danger me-1"></i>异常IP（失败次数多）</h6>
+            <div class="table-responsive" id="suspiciousIPs" style="max-height:160px;overflow-y:auto;"></div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="sec-chart-box">
+            <h6><i class="bi bi-clock-history me-1"></i>最近安全事件</h6>
+            <div id="securityEvents" style="max-height:160px;overflow-y:auto;"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+let trendChart = null, distChart = null;
+let currentDays = 7;
+
+function getBadgeClass(action) {
+    if (action === '登录成功') return 'badge-success-evt';
+    if (action === '登录失败') return 'badge-danger-evt';
+    if (action === '账户锁定') return 'badge-danger-evt';
+    if (action === '删除用户') return 'badge-danger-evt';
+    if (action === '修改用户') return 'badge-warn-evt';
+    return 'badge-info-evt';
+}
+
+function formatTime(v) {
+    if (!v) return '';
+    var d = new Date(v);
+    if (isNaN(d.getTime())) return v;
+    var m = String(d.getMonth()+1).padStart(2,'0');
+    var dd = String(d.getDate()).padStart(2,'0');
+    var h = String(d.getHours()).padStart(2,'0');
+    var mi = String(d.getMinutes()).padStart(2,'0');
+    return m + '-' + dd + ' ' + h + ':' + mi;
+}
+
+async function loadDashboard(days) {
+    currentDays = days;
+    try {
+        var res = await fetch('/api/security_data?days=' + days);
+        var data = await res.json();
+
+        var ov = data.overview;
+        document.getElementById('overviewCards').innerHTML =
+            '<div class="col-md-2"><div class="sec-card sec-stat"><div class="value text-success">' + ov.today_success + '</div><div class="label">今日登录成功</div></div></div>' +
+            '<div class="col-md-2"><div class="sec-card sec-stat"><div class="value text-danger">' + ov.today_fail + '</div><div class="label">今日登录失败</div></div></div>' +
+            '<div class="col-md-2"><div class="sec-card sec-stat"><div class="value text-warning">' + ov.locked_count + '</div><div class="label">当前锁定账户</div></div></div>' +
+            '<div class="col-md-2"><div class="sec-card sec-stat"><div class="value text-info">' + ov.unique_ips + '</div><div class="label">今日独立IP</div></div></div>' +
+            '<div class="col-md-2"><div class="sec-card sec-stat"><div class="value text-primary">' + ov.total_events + '</div><div class="label">今日总事件</div></div></div>' +
+            '<div class="col-md-2"><div class="sec-card sec-stat"><div class="value" style="color:#6366f1;">' + ov.last_24h_events + '</div><div class="label">24h总事件</div></div></div>';
+
+        // 登录趋势
+        var trendLabels = data.trend.map(function(t){ return t.date.slice(5); });
+        if (trendChart) {
+            trendChart.data.labels = trendLabels;
+            trendChart.data.datasets[0].data = data.trend.map(function(t){ return t.success; });
+            trendChart.data.datasets[1].data = data.trend.map(function(t){ return t.fail; });
+            trendChart.update();
+        } else {
+            trendChart = new Chart(document.getElementById('loginTrendChart'), {
+                type: 'line',
+                data: { labels: trendLabels, datasets: [
+                    { label: '成功', data: data.trend.map(function(t){ return t.success; }), borderColor: '#16a34a', borderWidth: 1.5, tension: 0.3, fill: false, pointRadius: 1 },
+                    { label: '失败', data: data.trend.map(function(t){ return t.fail; }), borderColor: '#dc2626', borderWidth: 1.5, tension: 0.3, fill: false, pointRadius: 1 }
+                ]},
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { boxWidth: 8, padding: 4, font: { size: 9 } } } }, scales: { x: { ticks: { font: { size: 8 } } }, y: { ticks: { font: { size: 8 } } } } }
+            });
+        }
+
+        // 操作分布
+        var distLabels = data.distribution.map(function(d){ return d.action; });
+        var distValues = data.distribution.map(function(d){ return d.cnt; });
+        if (distChart) {
+            distChart.data.labels = distLabels;
+            distChart.data.datasets[0].data = distValues;
+            distChart.update();
+        } else {
+            distChart = new Chart(document.getElementById('actionDistChart'), {
+                type: 'doughnut',
+                data: { labels: distLabels, datasets: [{ data: distValues, backgroundColor: ['#16a34a','#dc2626','#f59e0b','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1','#84cc16'] }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 6, padding: 3, font: { size: 9 } } } }, cutout: '55%' }
+            });
+        }
+
+        var ips = data.suspicious_ips;
+        var ipHtml = ips.length === 0
+            ? '<div class="text-center text-muted py-2 small">暂无异常IP</div>'
+            : '<table class="table table-xs table-hover mb-0"><thead><tr><th>IP</th><th class="text-danger">失败</th><th class="text-success">成功</th><th>总计</th><th>最近</th></tr></thead><tbody>' +
+              ips.map(function(r){
+                  return '<tr><td class="event-ip">' + (r.ip_address||'未知') + '</td><td class="text-danger fw-bold">' + r.fail_count + '</td><td class="text-success">' + r.success_count + '</td><td>' + r.total_attempts + '</td><td>' + formatTime(r.last_seen) + '</td></tr>';
+              }).join('') + '</tbody></table>';
+        document.getElementById('suspiciousIPs').innerHTML = ipHtml;
+
+        var events = data.events;
+        var evtHtml = '<div class="list-group list-group-flush small">';
+        events.forEach(function(e){
+            evtHtml += '<div class="list-group-item py-1 px-0 d-flex justify-content-between align-items-center border-0 border-bottom evt-item">' +
+                '<div><span class="badge me-1 ' + getBadgeClass(e.action) + '">' + e.action + '</span>' +
+                '<strong>' + (e.username||'') + '</strong> ' + (e.detail||'') + '</div>' +
+                '<div class="text-end"><span class="event-ip">' + (e.ip_address||'') + '</span> <span class="text-muted">' + formatTime(e.created_at) + '</span></div>' +
+                '</div>';
+        });
+        evtHtml += '</div>';
+        document.getElementById('securityEvents').innerHTML = evtHtml;
+
+    } catch (err) {
+        console.error('加载安全数据失败:', err);
+    }
+}
+
+function changeDays(days) {
+    document.querySelectorAll('.btn-group-sm .btn').forEach(function(b){ b.classList.remove('active'); });
+    event.target.classList.add('active');
+    loadDashboard(days);
+}
+
+document.addEventListener('DOMContentLoaded', function(){ loadDashboard(7); });
+</script>
+{% endblock %}

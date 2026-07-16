@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mt-3"><i class="bi bi-shop"></i> 门店管理</h2>
+<div class="row mt-3">
+    <div class="col-md-8">
+        <form method="get" class="d-flex">
+            <input type="text" name="keyword" class="form-control me-2" placeholder="药店名称/编号" value="{{ keyword }}">
+            <button class="btn btn-primary"><i class="bi bi-search"></i> </button>
+        </form>
+    </div>
+    <div class="col-md-4 text-end">
+        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#storeAddModal" onclick="resetAddForm()"><i class="bi bi-plus-circle"></i> 新增门店</button>
+    </div>
+</div>
+
+<!-- 门店列表（已移除药房管理员列） -->
+<table class="table table-hover mt-3">
+    <thead class="table-light">
+        <tr><th>编号</th><th>药店名称</th><th>位置</th><th>营业状态</th><th>营业时间</th><th>创建时间</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+        {% for s in stores %}
+        <tr>
+            <td>{{ s.pharmacy_code }}</td>
+            <td>{{ s.pharmacy_name }}</td>
+            <td>{{ s.location }}</td>
+            <td>{% if s.business_status %}营业{% else %}暂停{% endif %}</td>
+            <td>{{ s.business_hours }}</td>
+            <td>{{ s.created_at.strftime('%Y-%m-%d') if s.created_at else '' }}</td>
+            <td>
+                <button class="btn btn-sm btn-warning" onclick='editStore({{ s | tojson }})' data-bs-toggle="modal" data-bs-target="#storeEditModal">编辑</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteStore({{ s.id }})">删除</button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div class="d-flex justify-content-between align-items-center mt-2">
+    <nav>
+        <ul class="pagination mb-0">
+            {% if page > 1 %}<li class="page-item"><a class="page-link" href="?page={{ page-1 }}&keyword={{ keyword }}">上一页</a></li>{% endif %}
+            {% for p in range(1, ((total-1)//10)+2) %}
+            <li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="?page={{ p }}&keyword={{ keyword }}">{{ p }}</a></li>
+            {% endfor %}
+            {% if page < ((total-1)//10)+1 %}<li class="page-item"><a class="page-link" href="?page={{ page+1 }}&keyword={{ keyword }}">下一页</a></li>{% endif %}
+        </ul>
+    </nav>
+    <form class="d-flex" onsubmit="jumpPage(event)">
+        <input type="text" class="form-control form-control-sm me-2" id="jump-page" placeholder="页码" style="width:80px">
+        <button class="btn btn-outline-primary btn-sm">跳转</button>
+    </form>
+</div>
+
+<!-- ================= 新增门店模态框 ================= -->
+<div class="modal fade" id="storeAddModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <form id="storeAddForm" onsubmit="saveAddStore(event)">
+            <div class="modal-header"><h5 class="modal-title">新增门店</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-3"><label>药店编号</label><input type="text" class="form-control" id="add_pharmacy_code" required></div>
+                <div class="mb-3"><label>药店名称</label><input type="text" class="form-control" id="add_pharmacy_name" required></div>
+                <div class="mb-3"><label>具体位置</label><input type="text" class="form-control" id="add_location" required></div>
+                <div class="mb-3"><label>营业状态</label>
+                    <select class="form-select" id="add_business_status">
+                        <option value="true">营业</option><option value="false">暂停</option>
+                    </select>
+                </div>
+                <div class="mb-3"><label>营业时间</label><input type="text" class="form-control" id="add_business_hours" placeholder="如 08:00-21:00"></div>
+            </div>
+            <div class="modal-footer"><button type="submit" class="btn btn-primary">保存</button></div>
+        </form>
+    </div></div>
+</div>
+
+<!-- ================= 编辑门店模态框 ================= -->
+<div class="modal fade" id="storeEditModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <form id="storeEditForm" onsubmit="saveEditStore(event)">
+            <div class="modal-header"><h5 class="modal-title">编辑门店</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="hidden" id="edit_store_id">
+                <div class="mb-3"><label>药店编号</label><input type="text" class="form-control" id="edit_pharmacy_code" readonly></div>
+                <div class="mb-3"><label>药店名称</label><input type="text" class="form-control" id="edit_pharmacy_name" required></div>
+                <div class="mb-3"><label>具体位置</label><input type="text" class="form-control" id="edit_location" required></div>
+                <div class="mb-3"><label>营业状态</label>
+                    <select class="form-select" id="edit_business_status">
+                        <option value="true">营业</option><option value="false">暂停</option>
+                    </select>
+                </div>
+                <div class="mb-3"><label>营业时间</label><input type="text" class="form-control" id="edit_business_hours"></div>
+            </div>
+            <div class="modal-footer"><button type="submit" class="btn btn-primary">保存</button></div>
+        </form>
+    </div></div>
+</div>
+
+<script>
+// ===== 新增门店相关 =====
+function resetAddForm() {
+    document.getElementById('storeAddForm').reset();
+}
+
+async function saveAddStore(e) {
+    e.preventDefault();
+    const data = {
+        pharmacy_code: document.getElementById('add_pharmacy_code').value.trim(),
+        pharmacy_name: document.getElementById('add_pharmacy_name').value.trim(),
+        location: document.getElementById('add_location').value.trim(),
+        business_status: document.getElementById('add_business_status').value === 'true',
+        business_hours: document.getElementById('add_business_hours').value.trim()
+    };
+    const res = await fetch('/api/stores', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(data)
+    });
+    if (res.ok) {
+        location.reload();
+    } else {
+        const result = await res.json();
+        alert(result.error || '新增失败');
+    }
+}
+
+// ===== 编辑门店相关 =====
+function editStore(store) {
+    document.getElementById('edit_store_id').value = store.id;
+    document.getElementById('edit_pharmacy_code').value = store.pharmacy_code || '';
+    document.getElementById('edit_pharmacy_name').value = store.pharmacy_name || '';
+    document.getElementById('edit_location').value = store.location || '';
+    document.getElementById('edit_business_status').value = store.business_status ? 'true' : 'false';
+    document.getElementById('edit_business_hours').value = store.business_hours || '';
+}
+
+async function saveEditStore(e) {
+    e.preventDefault();
+    const id = document.getElementById('edit_store_id').value;
+    const data = {
+        pharmacy_code: document.getElementById('edit_pharmacy_code').value.trim(),
+        pharmacy_name: document.getElementById('edit_pharmacy_name').value.trim(),
+        location: document.getElementById('edit_location').value.trim(),
+        business_status: document.getElementById('edit_business_status').value === 'true',
+        business_hours: document.getElementById('edit_business_hours').value.trim()
+    };
+    const res = await fetch(`/api/stores/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(data)
+    });
+    if (res.ok) {
+        location.reload();
+    } else {
+        const result = await res.json();
+        alert(result.error || '修改失败');
+    }
+}
+
+// ===== 删除与跳页（保持不变）=====
+async function deleteStore(id) {
+    if (!confirm('确定删除该门店吗？')) return;
+    const res = await fetch(`/api/stores/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+        location.reload();
+    } else {
+        const result = await res.json();
+        alert(result.error || '删除失败');
+    }
+}
+function jumpPage(e) {
+    e.preventDefault();
+    const p = document.getElementById('jump-page').value;
+    if (p) location.href = `?page=${p}&keyword={{ keyword }}`;
+}
+</script>
+{% endblock %}

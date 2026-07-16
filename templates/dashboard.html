@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3">
+    <h4 class="fw-semibold text-primary"><i class="bi bi-speedometer2 me-2"></i>运营仪表盘</h4>
+    <span class="text-secondary small">{{ current_user.real_name }} · {{ current_user.store_name }}</span>
+</div>
+
+<!-- 第一行：核心指标（6个小卡片） -->
+<div class="row g-3">
+    <div class="col-md-2">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body p-2 text-center">
+                <i class="bi bi-currency-dollar fs-6 text-success"></i>
+                <h6 class="mt-1 mb-0 fw-bold">¥ {{ "%.0f"|format(total_sales_amount) }}</h6>
+                <small class="text-secondary">累计销售额</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body p-2 text-center">
+                <i class="bi bi-cart-check fs-6 text-primary"></i>
+                <h6 class="mt-1 mb-0 fw-bold">{{ total_sales_count }}</h6>
+                <small class="text-secondary">销售订单数</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body p-2 text-center">
+                <i class="bi bi-capsule fs-6 text-info"></i>
+                <h6 class="mt-1 mb-0 fw-bold">{{ total_med_count }}</h6>
+                <small class="text-secondary">药品总数</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body p-2 text-center">
+                <i class="bi bi-shop fs-6 text-warning"></i>
+                <h6 class="mt-1 mb-0 fw-bold">{{ total_store_count }}</h6>
+                <small class="text-secondary">门店数量</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body p-2 text-center">
+                <i class="bi bi-exclamation-triangle fs-6 text-danger"></i>
+                <h6 class="mt-1 mb-0 fw-bold">{{ low_warn_count }}</h6>
+                <small class="text-secondary">低库存预警</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body p-2 text-center">
+                <i class="bi bi-calendar-x fs-6 text-secondary"></i>
+                <h6 class="mt-1 mb-0 fw-bold">{{ exp_warn_count }}</h6>
+                <small class="text-secondary">近效期/过期</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 第二行：今日概览 + 待办提醒 -->
+<div class="row g-3 mt-2">
+    <div class="col-md-6">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white fw-semibold small py-2">今日概览</div>
+            <div class="card-body p-3">
+                <table class="table table-sm table-borderless small mb-0">
+                    <tr><td>今日销售额</td><td class="text-end fw-semibold">¥ {{ extra_stats.get('今日销售额', 0) }}</td></tr>
+                    <tr><td>今日订单数</td><td class="text-end">{{ extra_stats.get('今日订单数', 0) }}</td></tr>
+                    <tr><td>可售药品数</td><td class="text-end">{{ extra_stats.get('可售药品数', 0) }}</td></tr>
+                    <tr><td>待处理调拨</td><td class="text-end">{{ extra_stats.get('待处理调拨', 0) }}</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white fw-semibold small py-2">待办提醒</div>
+            <div class="card-body p-3">
+                <ul class="list-group list-group-flush small">
+                    {% if current_user.role == '系统管理员' and suggestion_pending > 0 %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        待审批药品建议
+                        <span class="badge bg-warning rounded-pill">{{ suggestion_pending }}</span>
+                    </li>
+                    {% endif %}
+                    {% if low_warn_count > 0 %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        低库存商品需要补货
+                        <span class="badge bg-danger rounded-pill">{{ low_warn_count }}</span>
+                    </li>
+                    {% endif %}
+                    <li class="list-group-item px-0">今日入库单: {{ extra_stats.get('今日入库单', 0) }} 笔</li>
+                    <li class="list-group-item px-0">待审价格单: {{ extra_stats.get('待审价格单', 0) }} 项</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 总店长专属：近30天各门店销售额图表 -->
+{% if current_user.role == '系统管理员' and store_data %}
+<div class="row g-3 mt-2">
+    <div class="col-12">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white fw-semibold small py-2">近30天各门店销售额</div>
+            <div class="card-body p-3">
+                <div id="storeSalesChart" style="height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- 第三行：核心功能 + 岗位权限 -->
+<div class="row g-3 mt-2">
+    <div class="col-md-7">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white fw-semibold small py-2">核心功能</div>
+            <div class="card-body p-3">
+                <div class="row small">
+                    <div class="col-md-6">
+                        <p class="mb-2"><i class="bi bi-check-circle-fill text-success me-1"></i> 采购入库 → 库存联动</p>
+                        <p class="mb-2"><i class="bi bi-check-circle-fill text-success me-1"></i> 销售收银 → 自动扣减</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p class="mb-2"><i class="bi bi-check-circle-fill text-success me-1"></i> 退货补库 · 效期预警</p>
+                        <p class="mb-2"><i class="bi bi-check-circle-fill text-success me-1"></i> 多角色权限隔离</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-5">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white fw-semibold small py-2">岗位权限</div>
+            <div class="card-body p-3">
+                <div class="small">
+                    <p><span class="badge bg-danger me-2">系统管理员</span> 用户管理、审批、审计</p>
+                    <p><span class="badge bg-primary me-2">药房管理员</span> 药品/出入库/调拨/价格申请</p>
+                    <p><span class="badge bg-success me-2">销售员</span> 销售开单、退货、个人记录</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if current_user.role == '系统管理员' and store_data %}
+<script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<script>
+    var storeData = {{ store_data | tojson }};
+    var chart = echarts.init(document.getElementById('storeSalesChart'));
+    chart.setOption({
+        tooltip: { trigger: 'axis' },
+        xAxis: { type: 'category', data: Object.keys(storeData) },
+        yAxis: { type: 'value', name: '销售额 (¥)' },
+        series: [{
+            name: '门店销售额',
+            type: 'bar',
+            data: Object.values(storeData),
+            itemStyle: { color: '#14b8a6' }
+        }]
+    });
+</script>
+{% endif %}
+{% endblock %}

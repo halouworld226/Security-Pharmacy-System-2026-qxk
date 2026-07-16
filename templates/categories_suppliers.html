@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mt-3"><i class="bi bi-diagram-3"></i> 基础资料</h2>
+
+<ul class="nav nav-tabs mt-3">
+    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#categories">药品分类</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#suppliers">供应商</a></li>
+</ul>
+
+<div class="tab-content mt-3">
+    <!-- 分类 -->
+    <div class="tab-pane fade show active" id="categories">
+        <button class="btn btn-sm btn-success mb-2" data-bs-toggle="modal" data-bs-target="#catModal">新增分类</button>
+        <table class="table">
+            <thead><tr><th>ID</th><th>名称</th><th>说明</th></tr></thead>
+            <tbody>
+                {% for c in categories %}
+                <tr><td>{{ c.id }}</td><td>{{ c.name }}</td><td>{{ c.description }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <!-- 供应商 -->
+    <div class="tab-pane fade" id="suppliers">
+        <button class="btn btn-sm btn-success mb-2" data-bs-toggle="modal" data-bs-target="#supModal">新增供应商</button>
+        <table class="table">
+            <thead><tr><th>ID</th><th>名称</th><th>联系人</th><th>电话</th><th>地址</th><th>评级</th></tr></thead>
+            <tbody>
+                {% for s in suppliers %}
+                <tr><td>{{ s.id }}</td><td>{{ s.name }}</td><td>{{ s.contact_person }}</td><td>{{ s.phone }}</td><td>{{ s.address }}</td><td>{{ s.rating }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 分类模态框 -->
+<div class="modal fade" id="catModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <form method="post" action="{{ url_for('add_category') }}">
+            <div class="modal-header"><h5>新增分类</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="text" name="name" class="form-control mb-2" placeholder="名称" required>
+                <textarea name="description" class="form-control" placeholder="说明"></textarea>
+            </div>
+            <div class="modal-footer"><button class="btn btn-primary">保存</button></div>
+        </form>
+    </div></div>
+</div>
+
+<!-- 供应商模态框 -->
+<div class="modal fade" id="supModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <form method="post" action="{{ url_for('add_supplier') }}">
+            <div class="modal-header"><h5>新增供应商</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="text" name="name" class="form-control mb-2" placeholder="名称" required>
+                <input type="text" name="contact_person" class="form-control mb-2" placeholder="联系人">
+                <input type="text" name="phone" class="form-control mb-2" placeholder="电话">
+                <input type="text" name="address" class="form-control mb-2" placeholder="地址">
+                <input type="number" name="rating" class="form-control" placeholder="评级" value="5">
+            </div>
+            <div class="modal-footer"><button class="btn btn-primary">保存</button></div>
+        </form>
+    </div></div>
+</div>
+{% endblock %}

@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mt-3"><i class="bi bi-tags"></i> 价格调整管理</h2>
+
+<!-- 统计卡片 -->
+<div class="row mt-3 g-3">
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body p-3">
+                <h6 class="card-title">待审批</h6>
+                <h3>{{ reqs|selectattr('status', 'equalto', '待审批')|list|length }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body p-3">
+                <h6 class="card-title">已通过</h6>
+                <h3>{{ reqs|selectattr('status', 'equalto', '已通过')|list|length }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-danger">
+            <div class="card-body p-3">
+                <h6 class="card-title">已驳回</h6>
+                <h3>{{ reqs|selectattr('status', 'equalto', '已驳回')|list|length }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-info">
+            <div class="card-body p-3">
+                <h6 class="card-title">平均调价幅度</h6>
+                <h3>{% if reqs %}{{ "%.1f"|format(reqs|sum(attribute='new_price')/reqs|length) }}%{% else %}0%{% endif %}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 申请表单（药房管理员可见） -->
+{% if current_user.role == '药房管理员' %}
+<div class="card mt-3">
+    <div class="card-header bg-primary text-white">
+        <i class="bi bi-plus-circle"></i> 发起价格调整申请
+    </div>
+    <div class="card-body">
+        <form method="post" action="{{ url_for('create_price_request') }}" class="row g-3">
+            <div class="col-md-2">
+                <label>药品ID</label>
+                <input type="number" name="medicine_id" class="form-control" placeholder="输入ID" required>
+            </div>
+            <div class="col-md-2">
+                <label>新价格</label>
+                <input type="number" step="0.01" name="new_price" class="form-control" placeholder="¥" required>
+            </div>
+            <div class="col-md-3">
+                <label>调整原因</label>
+                <input type="text" name="reason" class="form-control" placeholder="例如：市场调价/成本变动">
+            </div>
+            <div class="col-md-3">
+                <label>备注</label>
+                <input type="text" name="remark" class="form-control" placeholder="可选">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button class="btn btn-primary w-100"><i class="bi bi-send"></i> 提交申请</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- 状态筛选 -->
+<div class="mt-3">
+    <a href="?status=全部" class="btn btn-sm btn-outline-secondary {% if status=='全部' %}active{% endif %}">全部</a>
+    <a href="?status=待审批" class="btn btn-sm btn-outline-warning {% if status=='待审批' %}active{% endif %}">待审批</a>
+    <a href="?status=已通过" class="btn btn-sm btn-outline-success {% if status=='已通过' %}active{% endif %}">已通过</a>
+    <a href="?status=已驳回" class="btn btn-sm btn-outline-danger {% if status=='已驳回' %}active{% endif %}">已驳回</a>
+    <button class="btn btn-sm btn-outline-info float-end" type="button" data-bs-toggle="collapse" data-bs-target="#chartCollapse">
+        <i class="bi bi-bar-chart"></i> 价格趋势
+    </button>
+</div>
+
+<!-- 价格趋势图（可折叠） -->
+<div class="collapse mt-3" id="chartCollapse">
+    <div class="card card-body">
+        <canvas id="priceTrendChart" width="400" height="150"></canvas>
+    </div>
+</div>
+
+<!-- 申请列表 -->
+<div class="table-responsive mt-3">
+    <table class="table table-hover table-bordered align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>ID</th><th>药品</th><th>编码</th><th>原价</th><th>新价</th><th>幅度</th><th>原因</th><th>状态</th><th>申请人</th><th>审批人</th><th>申请时间</th><th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in reqs %}
+            <tr>
+                <td>{{ r.id }}</td>
+                <td>{{ r.medicine_name }}</td>
+                <td>{{ r.code }}</td>
+                <td>¥{{ "%.2f"|format(r.old_price) }}</td>
+                <td>¥{{ "%.2f"|format(r.new_price) }}</td>
+                <td>
+                    {% set change = ((r.new_price - r.old_price) / r.old_price * 100) if r.old_price else 0 %}
+                    <span class="{% if change > 0 %}text-danger{% elif change < 0 %}text-success{% endif %}">
+                        {{ "%+.1f"|format(change) }}%
+                    </span>
+                </td>
+                <td>{{ r.reason }}</td>
+                <td>
+                    {% if r.status == '待审批' %}
+                    <span class="badge bg-warning text-dark">待审批</span>
+                    {% elif r.status == '已通过' %}
+                    <span class="badge bg-success">已通过</span>
+                    {% else %}
+                    <span class="badge bg-danger">已驳回</span>
+                    {% endif %}
+                </td>
+                <td>{{ r.request_by }}</td>
+                <td>{{ r.approve_by or '-' }}</td>
+                <td>{{ r.requested_at.strftime('%m-%d %H:%M') if r.requested_at else '' }}</td>
+                <td>
+                    {% if current_user.role == '管理员' and r.status == '待审批' %}
+                    <a href="{{ url_for('approve_price_request', rid=r.id, passed=1) }}" class="btn btn-sm btn-success" title="通过">
+                        <i class="bi bi-check-lg"></i>
+                    </a>
+                    <a href="{{ url_for('approve_price_request', rid=r.id, passed=0) }}" class="btn btn-sm btn-danger" title="驳回">
+                        <i class="bi bi-x-lg"></i>
+                    </a>
+                    {% else %}
+                    <button class="btn btn-sm btn-outline-secondary" disabled>—</button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+    // 价格趋势图数据（模拟，实际可从后端接口获取）
+    document.addEventListener('DOMContentLoaded', function() {
+        const ctx = document.getElementById('priceTrendChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['一月', '二月', '三月', '四月', '五月', '六月'],
+                datasets: [{
+                    label: '平均价格指数',
+                    data: [100, 102, 98, 105, 110, 108],
+                    borderColor: '#14b8a6',
+                    tension: 0.3,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: { display: true, text: '近半年药品价格指数趋势' }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

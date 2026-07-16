@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>销售记录 - 药房管理员工作台</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.3.0-alpha1/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background-color: #f0f2f5; font-family: 'Segoe UI', system-ui, 'Roboto', sans-serif; }
+        .top-nav {
+            background-color: #0d6efd;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            color: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        .logo-area { font-size: 1.2rem; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+        .user-area { display: flex; align-items: center; gap: 20px; }
+        .user-info { text-align: right; line-height: 1.3; }
+        .user-name { font-weight: 600; font-size: 14px; }
+        .user-role { font-size: 12px; opacity: 0.85; }
+        .logout-btn {
+            color: white; background: rgba(255,255,255,0.15); border-radius: 8px;
+            padding: 6px 14px; text-decoration: none; font-size: 13px; transition: 0.2s;
+        }
+        .logout-btn:hover { background: rgba(255,255,255,0.25); color: white; }
+        .sidebar {
+            width: 260px; background-color: #ffffff; border-right: 1px solid #e9ecef;
+            height: calc(100vh - 60px); position: sticky; top: 60px; overflow-y: auto;
+            padding: 16px 0;
+        }
+        .sidebar .nav-link {
+            color: #495057; padding: 10px 20px; margin: 2px 12px; border-radius: 10px;
+            display: flex; align-items: center; gap: 12px; transition: all 0.2s;
+        }
+        .sidebar .nav-link i { font-size: 1.2rem; width: 24px; }
+        .sidebar .nav-link:hover { background-color: #e9ecef; color: #0d6efd; }
+        .sidebar .nav-link.active { background-color: #e7f1ff; color: #0d6efd; font-weight: 500; }
+        .main-content { flex: 1; padding: 24px; background-color: #f0f2f5; overflow-y: auto; }
+        .wrapper { display: flex; }
+        .card-custom {
+            border: none; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            background-color: #fff;
+            margin-bottom: 1.5rem;
+        }
+        .card-header-custom {
+            background: transparent; border-bottom: 1px solid #f1f5f9;
+            font-weight: 600; padding: 1rem 1rem 0.5rem 1rem;
+        }
+        .card-body-custom { padding: 1rem; }
+        .alert-info-custom {
+            background-color: #eff6ff;
+            border: none;
+            border-radius: 12px;
+            padding: 0.75rem;
+        }
+    </style>
+</head>
+<body>
+<div class="top-nav">
+    <div class="logo-area"><i class="bi bi-shop"></i> 药房管理系统</div>
+    <div class="user-area">
+        <div class="user-info">
+            <div class="user-name">{{ current_user.real_name if current_user else '药房管理员' }}</div>
+            <div class="user-role">{{ current_user.role if current_user else '药房管理员' }} · {{ current_user.store_name if current_user else '总店' }}</div>
+        </div>
+        <a href="/logout" class="logout-btn"><i class="bi bi-box-arrow-right"></i> 退出</a>
+    </div>
+</div>
+<div class="wrapper">
+    <div class="sidebar">
+        <nav class="nav flex-column">
+            <a class="nav-link" href="/shopmanager_dashboard"><i class="bi bi-house-door"></i> 首页概览</a>
+            <a class="nav-link" href="/shopmanager/medicines_fixed"><i class="bi bi-capsule"></i> 药品管理</a>
+            <a class="nav-link active" href="/shopmanager/sales_records"><i class="bi bi-receipt"></i> 销售记录</a>
+            <a class="nav-link" href="/shopmanager/inventory_warning"><i class="bi bi-exclamation-triangle"></i> 库存预警</a>
+            <a class="nav-link" href="/shopmanager/stock_io"><i class="bi bi-arrow-left-right"></i> 出入库管理</a>
+        </nav>
+    </div>
+    <div class="main-content">
+        <div class="card-custom">
+            <div class="card-header-custom">
+                <label>选择销售员：</label>
+                <select id="salesman_select" class="form-select form-select-sm d-inline-block w-auto ms-2">
+                    {% for s in salesmen %}
+                    <option value="{{ s.username }}" {% if s.username == selected %}selected{% endif %}>{{ s.real_name }} ({{ s.username }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="card-body-custom">
+                <!-- Tab 切换 -->
+                <ul class="nav nav-tabs" id="recordTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="sales-tab" data-bs-toggle="tab" data-bs-target="#sales" type="button" role="tab">销售记录</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="returns-tab" data-bs-toggle="tab" data-bs-target="#returns" type="button" role="tab">退货记录</button>
+                    </li>
+                </ul>
+                <div class="tab-content mt-3">
+                    <!-- 销售记录 -->
+                    <div class="tab-pane fade show active" id="sales" role="tabpanel">
+                        <div class="row">
+                            <div class="col-md-4"><div class="alert alert-info-custom">本月销售额：<strong id="month_amount">--</strong> 元</div></div>
+                            <div class="col-md-4"><div class="alert alert-info-custom">本月销售单数：<strong id="month_orders">--</strong> 单</div></div>
+                            <div class="col-md-4"><div class="alert alert-info-custom">本店排名：<strong id="rank">--</strong></div></div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-12">
+                                <div id="sales_line" style="height: 400px;"></div>
+                            </div>
+                        </div>
+                        <div class="row mt-4">
+                            <div class="col-md-12">
+                                <h5><i class="bi bi-receipt"></i> 最近交易记录</h5>
+                                <div id="recent_orders"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 退货记录 -->
+                    <div class="tab-pane fade" id="returns" role="tabpanel">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr><th>退货单号</th><th>原销售单号</th><th>退款金额</th><th>原因</th><th>销售操作人</th><th>退货操作人</th><th>时间</th><th>操作</th></tr>
+                                </thead>
+                                <tbody>
+                                    {% for ret in return_records %}
+                                    <tr>
+                                        <td>{{ ret.order_no }}</a></td>
+                                        <td>{{ ret.sale_order_no }}</a></a></td>
+                                        <td>¥{{ ret.total_refund_amount }}</a></a></a></td>
+                                        <td>{{ ret.reason }}</a></a></a></a></td>
+                                        <td>{{ ret.sales_operator or '-' }}</a></a></a></a></a></td>
+                                        <td>{{ ret.return_operator or '-' }}</a></a></a></a></a></a></td>
+                                        <td>{{ ret.created_at.strftime('%Y-%m-%d %H:%M') if ret.created_at else '' }}</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                                        <td><button class="btn btn-sm btn-outline-info return-detail-btn" data-return-no="{{ ret.order_no }}">详情</button></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                                    </tr>
+                                    {% else %}
+                                    <tr><td colspan="8" class="text-center">暂无退货记录</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 销售订单详情模态框 -->
+<div class="modal fade" id="orderDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">订单详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="orderDetailContent">加载中...</div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 退货单详情模态框 -->
+<div class="modal fade" id="returnDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">退货单详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="returnDetailContent">加载中...</div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.3.0-alpha1/js/bootstrap.bundle.min.js"></script>
+<script>
+    function loadSalesmanStats(salesman) {
+        fetch(`/api/shopmanager/salesman_stats?salesman=${salesman}`)
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('month_amount').innerText = data.month_amount.toFixed(2);
+                document.getElementById('month_orders').innerText = data.month_orders;
+                document.getElementById('rank').innerText = data.rank ? data.rank : '-';
+
+                // 销售额 & 利润双线图
+                var lineChart = echarts.init(document.getElementById('sales_line'));
+                lineChart.setOption({
+                    title: { text: '本月每日销售额 & 利润趋势' },
+                    tooltip: { trigger: 'axis' },
+                    legend: { data: ['销售额', '利润'] },
+                    xAxis: { type: 'category', data: data.daily_sales.map(d => d.date) },
+                    yAxis: { type: 'value', name: '金额(元)' },
+                    series: [
+                        {
+                            name: '销售额',
+                            type: 'line',
+                            data: data.daily_sales.map(d => d.amount),
+                            smooth: true,
+                            lineStyle: { width: 2, type: 'solid', color: '#0d6efd' },
+                            areaStyle: { opacity: 0.1 }
+                        },
+                        {
+                            name: '利润',
+                            type: 'line',
+                            data: (data.daily_profit || []).map(d => d.profit),
+                            smooth: true,
+                            lineStyle: { width: 2, type: 'dashed', color: '#10b981' }
+                        }
+                    ]
+                });
+
+                let html = '<table class="table table-sm table-striped"><thead><tr><th>订单号</th><th>销售额(¥)</th><th>利润(¥)</th><th>支付方式</th><th>时间</th><th>操作</th></tr></thead><tbody>';
+                data.recent_orders.forEach(o => {
+                    let profitVal = (o.profit !== undefined && o.profit !== null) ? parseFloat(o.profit).toFixed(2) : '0.00';
+                    html += `<tr>
+                        <td>${o.order_no}</td>
+                        <td>${parseFloat(o.actual_amount).toFixed(2)}</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                        <td>${profitVal}</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                        <td>${o.payment_method}</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                        <td>${o.created_at}</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                        <td><button class="btn btn-sm btn-outline-primary order-detail-btn" data-order-no="${o.order_no}">详情</button></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                document.getElementById('recent_orders').innerHTML = html;
+
+                // 绑定销售订单详情按钮事件
+                document.querySelectorAll('.order-detail-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const orderNo = this.getAttribute('data-order-no');
+                        showOrderDetail(orderNo);
+                    });
+                });
+            });
+    }
+
+    function showOrderDetail(orderNo) {
+        const modal = new bootstrap.Modal(document.getElementById('orderDetailModal'));
+        const contentDiv = document.getElementById('orderDetailContent');
+        contentDiv.innerHTML = '加载中...';
+        fetch(`/api/sale_order/${orderNo}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    let itemsHtml = '<table class="table table-bordered"><thead><tr><th>药品名称</th><th>数量</th><th>单价</th><th>金额</th><tr></thead><tbody>';
+                    data.items.forEach(item => {
+                        itemsHtml += `<tr>
+                            <td>${item.name}</td>
+                            <td>${item.sold_quantity}</td>
+                            <td>¥${item.unit_price}</td>
+                            <td>¥${item.amount}</td>
+                        </tr>`;
+                    });
+                    itemsHtml += '</tbody></table>';
+                    contentDiv.innerHTML = `
+                        <p><strong>订单号：</strong> ${data.order.order_no}</p>
+                        <p><strong>总金额：</strong> ¥${data.order.total_amount}</p>
+                        <p><strong>实付金额：</strong> ¥${data.order.actual_amount}</p>
+                        <p><strong>支付方式：</strong> ${data.order.payment_method}</p>
+                        <p><strong>收银员：</strong> ${data.order.cashier}</p>
+                        <p><strong>门店：</strong> ${data.order.store_name}</p>
+                        <p><strong>时间：</strong> ${data.order.created_at}</p>
+                        <h6>药品明细：</h6>
+                        ${itemsHtml}
+                    `;
+                } else {
+                    contentDiv.innerHTML = '<div class="alert alert-danger">加载失败：' + (data.message || '未知错误') + '</div>';
+                }
+                modal.show();
+            })
+            .catch(err => {
+                contentDiv.innerHTML = '<div class="alert alert-danger">网络错误</div>';
+                modal.show();
+            });
+    }
+
+    function showReturnDetail(returnNo) {
+        const modal = new bootstrap.Modal(document.getElementById('returnDetailModal'));
+        const contentDiv = document.getElementById('returnDetailContent');
+        contentDiv.innerHTML = '加载中...';
+        fetch(`/api/return_order_detail/${returnNo}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    let itemsHtml = '<table class="table table-bordered"><thead><tr><th>药品名称</th><th>数量</th><th>单价</th><th>退款金额</th></tr></thead><tbody>';
+                    data.items.forEach(item => {
+                        itemsHtml += `<tr>
+                            <td>${item.medicine_name}</td>
+                            <td>${item.quantity}</td>
+                            <td>¥${item.unit_price}</td>
+                            <td>¥${item.refund_amount}</td>
+                        </tr>`;
+                    });
+                    itemsHtml += '</tbody></table>';
+                    contentDiv.innerHTML = `
+                        <p><strong>退货单号：</strong> ${data.return_order.order_no}</p>
+                        <p><strong>原销售单号：</strong> ${data.return_order.sale_order_no}</p>
+                        <p><strong>退款总额：</strong> ¥${data.return_order.total_refund_amount}</p>
+                        <p><strong>退货原因：</strong> ${data.return_order.reason}</p>
+                        <p><strong>销售操作人：</strong> ${data.return_order.sales_operator || '-'}</p>
+                        <p><strong>退货操作人：</strong> ${data.return_order.operator_name}</p>
+                        <p><strong>时间：</strong> ${data.return_order.created_at}</p>
+                        <h6>退货药品明细：</h6>
+                        ${itemsHtml}
+                    `;
+                } else {
+                    contentDiv.innerHTML = '<div class="alert alert-danger">加载失败：' + (data.message || '未知错误') + '</div>';
+                }
+                modal.show();
+            })
+            .catch(err => {
+                contentDiv.innerHTML = '<div class="alert alert-danger">网络错误</div>';
+                modal.show();
+            });
+    }
+
+    document.getElementById('salesman_select').addEventListener('change', (e) => loadSalesmanStats(e.target.value));
+    loadSalesmanStats(document.getElementById('salesman_select').value);
+
+    document.querySelectorAll('.return-detail-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const returnNo = this.getAttribute('data-return-no');
+            showReturnDetail(returnNo);
+        });
+    });
+</script>
+</body>
+</html>

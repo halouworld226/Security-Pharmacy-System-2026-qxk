@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  # ========== 数据库 ==========
+  db:
+    image: enmotech/opengauss:latest
+    container_name: opengauss
+    environment:
+      GS_USERNAME: druguser
+      GS_PASSWORD: Drug@1234
+      GS_DB: drugstore
+    ports:
+      - "15432:5432"
+    volumes:
+      - ./init_merged.sql:/docker-entrypoint-initdb.d/init.sql
+      - opengauss-data:/var/lib/opengauss
+    restart: unless-stopped
+
+  # ========== Web 应用 ==========
+  web:
+    build: .
+    container_name: pharmacy-web
+    ports:
+      - "5000:5000"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: druguser
+      DB_PASSWORD: Drug@1234
+      DB_NAME: drugstore
+      SECRET_KEY: dev-secret-key-change-in-production
+      FLASK_DEBUG: "false"
+    depends_on:
+      - db
+    restart: unless-stopped
+
+volumes:
+  opengauss-data:

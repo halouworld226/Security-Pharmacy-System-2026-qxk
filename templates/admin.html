@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>系统管理员端</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar">
+        <h2>系统管理员</h2>
+        <p>欢迎：{{ user.real_name }}</p>
+        <ul>
+            <li onclick="showTab('dashboard')">首页概览</li>
+            <li onclick="showTab('users')">用户管理</li>
+            <li onclick="showTab('suggestions')">药品意见审批</li>
+        </ul>
+        <a class="logout-btn" href="/api/logout">退出登录</a>
+    </aside>
+
+    <main class="main">
+        <section id="dashboard" class="tab active">
+            <h2>系统概览</h2>
+            <div class="cards" id="dashboardCards"></div>
+        </section>
+
+        <section id="users" class="tab">
+            <h2>用户管理</h2>
+            <div class="toolbar">
+                <button class="btn primary" onclick="openUserModal()">新增用户</button>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>用户名</th>
+                        <th>姓名</th>
+                        <th>角色</th>
+                        <th>所属门店</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="userTableBody"></tbody>
+            </table>
+        </section>
+
+        <section id="suggestions" class="tab">
+            <h2>药品意见审批 <span id="unreadBadge" class="badge"></span></h2>
+            <div class="toolbar">
+                <select id="suggestionStatus" onchange="loadSuggestions()">
+                    <option value="">全部状态</option>
+                    <option value="待审批">待审批</option>
+                    <option value="已通过">已通过</option>
+                    <option value="已驳回">已驳回</option>
+                </select>
+                <button class="btn success" onclick="batchApprove()">批量通过</button>
+                <button class="btn danger" onclick="batchReject()">批量驳回</button>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" onclick="toggleAllSuggestions(this)"></th>
+                        <th>ID</th>
+                        <th>药品名称</th>
+                        <th>类型</th>
+                        <th>数量</th>
+                        <th>预估价格</th>
+                        <th>提交人</th>
+                        <th>状态</th>
+                        <th>提交时间</th>
+                        <th>原因</th>
+                        <th>审批意见</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="suggestionTableBody"></tbody>
+            </table>
+        </section>
+    </main>
+</div>
+
+<div class="modal" id="userModal">
+    <div class="modal-content">
+        <h3 id="userModalTitle">新增用户</h3>
+        <input type="hidden" id="userId">
+        <div class="form-item"><label>用户名</label><input id="u_username"></div>
+        <div class="form-item"><label>密码</label><input id="u_password"></div>
+        <div class="form-item"><label>姓名</label><input id="u_real_name"></div>
+        <div class="form-item">
+            <label>角色</label>
+            <select id="u_role">
+                <option value="系统管理员">系统管理员</option>
+                <option value="药房管理员">药房管理员</option>
+                <option value="销售员">销售员</option>
+            </select>
+        </div>
+        <div class="form-item">
+            <label>门店</label>
+            <select id="u_store_id"></select>
+        </div>
+        <div class="modal-actions">
+            <button class="btn primary" onclick="saveUser()">保存</button>
+            <button class="btn" onclick="closeModal('userModal')">取消</button>
+        </div>
+    </div>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+function showTab(tabId) {
+    document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    if (tabId === 'dashboard') loadDashboard();
+    if (tabId === 'users') loadUsers();
+    if (tabId === 'suggestions') {
+        loadSuggestions();
+        loadUnreadCount();
+    }
+}
+
+async function initStores() {
+    const res = await fetch('/api/stores');
+    const data = await res.json();
+    const select = document.getElementById('u_store_id');
+    select.innerHTML = '';
+    data.data.forEach(s => {
+        select.innerHTML += `<option value="${s.id}">${s.store_name}</option>`;
+    });
+}
+
+async function loadDashboard() {
+    const res = await fetch('/api/dashboard');
+    const data = await res.json();
+    const d = data.data;
+    document.getElementById('dashboardCards').innerHTML = `
+        <div class="card"><h3>药品总数</h3><p>${d.drug_count}</p></div>
+        <div class="card"><h3>系统用户数</h3><p>${d.user_count}</p></div>
+        <div class="card"><h3>今日销售额</h3><p>￥${d.today_sales}</p></div>
+        <div class="card"><h3>低库存药品</h3><p>${d.low_stock}</p></div>
+        <div class="card"><h3>待审批意见</h3><p>${d.pending_suggestions}</p></div>
+    `;
+}
+
+async function loadUsers() {
+    const res = await fetch('/api/users');
+    const data = await res.json();
+    const tbody = document.getElementById('userTableBody');
+    tbody.innerHTML = '';
+    data.data.forEach(u => {
+        tbody.innerHTML += `
+            <tr>
+                <td>${u.id}</td>
+                <td>${u.username}</td>
+                <td>${u.real_name || ''}</td>
+                <td>${u.role}</td>
+                <td>${u.store_name || ''}</td>
+                <td>${formatTime(u.created_at)}</td>
+                <td>
+                    <button class="btn small warning" onclick='editUser(${JSON.stringify(u)})'>编辑</button>
+                    <button class="btn small danger" onclick='deleteUser(${u.id})'>删除</button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+function openUserModal() {
+    document.getElementById('userModalTitle').innerText = '新增用户';
+    document.getElementById('userId').value = '';
+    document.getElementById('u_username').disabled = false;
+    document.getElementById('u_username').value = '';
+    document.getElementById('u_password').value = '';
+    document.getElementById('u_real_name').value = '';
+    document.getElementById('u_role').value = '销售员';
+    document.getElementById('userModal').style.display = 'flex';
+}
+
+function editUser(u) {
+    document.getElementById('userModalTitle').innerText = '编辑用户';
+    document.getElementById('userId').value = u.id;
+    document.getElementById('u_username').value = u.username;
+    document.getElementById('u_username').disabled = true;
+    document.getElementById('u_password').value = '';
+    document.getElementById('u_real_name').value = u.real_name || '';
+    document.getElementById('u_role').value = u.role;
+    document.getElementById('u_store_id').value = u.store_id;
+    document.getElementById('userModal').style.display = 'flex';
+}
+
+async function saveUser() {
+    const id = document.getElementById('userId').value;
+    const payload = {
+        username: document.getElementById('u_username').value,
+        password: document.getElementById('u_password').value,
+        real_name: document.getElementById('u_real_name').value,
+        role: document.getElementById('u_role').value,
+        store_id: parseInt(document.getElementById('u_store_id').value)
+    };
+
+    let url = '/api/users/add';
+    if (id) {
+        url = '/api/users/update';
+        payload.id = parseInt(id);
+    }
+
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    alert(data.msg);
+    if (data.code === 200) {
+        closeModal('userModal');
+        loadUsers();
+    }
+}
+
+async function deleteUser(id) {
+    if (!confirm('确定删除该用户吗？')) return;
+    const res = await fetch(`/api/users/delete/${id}`, {method: 'POST'});
+    const data = await res.json();
+    alert(data.msg);
+    loadUsers();
+}
+
+async function loadUnreadCount() {
+    const res = await fetch('/api/suggestions/unread');
+    const data = await res.json();
+    document.getElementById('unreadBadge').innerText = `未读 ${data.data.count}`;
+}
+
+async function loadSuggestions() {
+    const status = document.getElementById('suggestionStatus').value;
+    const res = await fetch('/api/suggestions?status=' + encodeURIComponent(status));
+    const data = await res.json();
+    const tbody = document.getElementById('suggestionTableBody');
+    tbody.innerHTML = '';
+    data.data.forEach(s => {
+        tbody.innerHTML += `
+            <tr>
+                <td><input type="checkbox" class="sug-check" value="${s.id}"></td>
+                <td>${s.id}</td>
+                <td>${s.drug_name}</td>
+                <td>${s.drug_type || ''}</td>
+                <td>${s.quantity || ''}</td>
+                <td>${s.estimated_price || ''}</td>
+                <td>${s.submitter_name || ''}</td>
+                <td>${s.status}</td>
+                <td>${formatTime(s.created_at)}</td>
+                <td>${s.reason || ''}</td>
+                <td>${s.admin_comment || ''}</td>
+                <td>
+                    ${s.status === '待审批' ? `
+                        <button class="btn small success" onclick="reviewSuggestion(${s.id}, 'approve')">通过</button>
+                        <button class="btn small danger" onclick="reviewSuggestion(${s.id}, 'reject')">驳回</button>
+                    ` : '已处理'}
+                </td>
+            </tr>
+        `;
+    });
+}
+
+async function reviewSuggestion(id, action) {
+    let comment = '';
+    if (action === 'reject') {
+        comment = prompt('请输入驳回原因：');
+        if (!comment) return;
+    }
+    const res = await fetch('/api/suggestions/review', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id, action, comment})
+    });
+    const data = await res.json();
+    alert(data.msg);
+    loadSuggestions();
+    loadUnreadCount();
+}
+
+function getSelectedSuggestionIds() {
+    return Array.from(document.querySelectorAll('.sug-check:checked')).map(x => parseInt(x.value));
+}
+
+function toggleAllSuggestions(el) {
+    document.querySelectorAll('.sug-check').forEach(c => c.checked = el.checked);
+}
+
+async function batchApprove() {
+    const ids = getSelectedSuggestionIds();
+    if (!ids.length) return alert('请先选择记录');
+    const res = await fetch('/api/suggestions/batch_review', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ids, action: 'approve'})
+    });
+    const data = await res.json();
+    alert(data.msg);
+    loadSuggestions();
+    loadUnreadCount();
+}
+
+async function batchReject() {
+    const ids = getSelectedSuggestionIds();
+    if (!ids.length) return alert('请先选择记录');
+    const comment = prompt('请输入批量驳回原因：');
+    if (!comment) return;
+    const res = await fetch('/api/suggestions/batch_review', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ids, action: 'reject', comment})
+    });
+    const data = await res.json();
+    alert(data.msg);
+    loadSuggestions();
+    loadUnreadCount();
+}
+
+initStores();
+loadDashboard();
+</script>
+</body>
+</html>

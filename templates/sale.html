@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="mt-2 mb-3 fw-semibold text-primary"><i class="bi bi-cart"></i> 销售开单</h4>
+
+<!-- 搜索过滤区 -->
+<form method="get" class="row g-2 bg-light p-3 rounded mb-3">
+    <div class="col-md-3">
+        <input type="text" name="keyword" class="form-control form-control-sm" placeholder="关键词" value="{{ filters.keyword }}">
+    </div>
+    <div class="col-md-2">
+        <input type="text" name="manufacturer" class="form-control form-control-sm" placeholder="厂家" value="{{ filters.manufacturer }}">
+    </div>
+    <div class="col-md-2">
+        <select name="category_id" class="form-select form-select-sm">
+            <option value="">全部分类</option>
+            {% for c in categories %}
+            <option value="{{ c.id }}" {% if filters.category_id==c.id|string %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select name="is_rx" class="form-select form-select-sm">
+            <option value="">全部类型</option>
+            <option value="1" {% if filters.is_rx=='1' %}selected{% endif %}>处方药</option>
+            <option value="0" {% if filters.is_rx=='0' %}selected{% endif %}>非处方药</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-search"></i> 查询</button>
+    </div>
+</form>
+
+<!-- 药品列表（带图片） -->
+<div style="max-height: 400px; overflow-y: auto;" class="mb-3">
+    <table class="table table-sm table-hover align-middle">
+        <thead class="table-light sticky-top">
+            <tr>
+                <th>图片</th><th>ID</th><th>名称</th><th>厂家</th><th>规格</th><th>进货价</th><th>售价</th><th>库存</th><th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in medicines %}
+            <tr>
+                <td>
+                    {% if m.image_path %}
+                    <img src="{{ m.image_path }}" width="36" height="36" style="object-fit: cover; border-radius: 6px;">
+                    {% else %}
+                    <div style="width:36px;height:36px;background:#e2e8f0;border-radius:6px;display:flex;align-items:center;justify-content:center;">
+                        <i class="bi bi-capsule" style="color:#94a3b8;"></i>
+                    </div>
+                    {% endif %}
+                </td>
+                <td>{{ m.id }}</td>
+                <td>{{ m.name }}</td>
+                <td>{{ m.manufacturer }}</td>
+                <td>{{ m.spec }}</td>
+                <td>¥{{ "%.2f"|format(m.purchase_price) }}</td>
+                <td>¥{{ "%.2f"|format(m.price) }}</td>
+                <td>{{ m.stock }}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-info me-1" onclick="showDetail({{ m.id }})" title="查看详情">
+                        <i class="bi bi-info-circle"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary pick-btn"
+                            data-id="{{ m.id }}"
+                            data-name="{{ m.name }}"
+                            data-price="{{ m.price }}"
+                            data-stock="{{ m.stock }}"
+                            title="选取药品">
+                        <i class="bi bi-plus-circle"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- 多药品购物车结账区域 -->
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white fw-semibold small py-2">当前销售单</div>
+    <div class="card-body">
+        <!-- 购物车药品表格 -->
+        <div class="table-responsive mb-3">
+            <table class="table table-sm table-bordered text-center align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>药品名称</th>
+                        <th>单价(¥)</th>
+                        <th>数量</th>
+                        <th>小计(¥)</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="cartTableBody">
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 总计 + 支付 + 结算 -->
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold">应付总计</label>
+                <input type="text" id="totalAmount" class="form-control form-control-sm fw-bold text-danger" readonly value="¥0.00">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold">支付方式</label>
+                <select id="paymentMethod" class="form-select form-select-sm">
+                    <option>现金</option><option>微信</option><option>支付宝</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold">实付金额</label>
+                <input type="number" id="payAmount" class="form-control form-control-sm" min="0" step="0.01" placeholder="输入实付金额">
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-success btn-sm w-100" id="checkoutBtn">
+                    <i class="bi bi-check-lg"></i> 确认结算
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 药品详情模态框 -->
+<div class="modal fade" id="medicineDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-capsule"></i> 药品详情</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="medicineDetailBody">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 购物车核心逻辑
+    let cart = [];
+
+    // 添加药品到购物车
+    document.querySelectorAll('.pick-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.dataset.id;
+            const name = btn.dataset.name;
+            const price = parseFloat(btn.dataset.price);
+            const stock = parseInt(btn.dataset.stock);
+
+            const exist = cart.find(item => item.id === id);
+            if (exist) {
+                if (exist.quantity < stock) {
+                    exist.quantity += 1;
+                } else {
+                    alert('库存不足！');
+                }
+            } else {
+                cart.push({ id, name, price, stock, quantity: 1 });
+            }
+            renderCart();
+        });
+    });
+
+    // 渲染购物车
+    function renderCart() {
+        const tbody = document.getElementById('cartTableBody');
+        tbody.innerHTML = '';
+        let total = 0;
+
+        cart.forEach((item, index) => {
+            const subtotal = item.price * item.quantity;
+            total += subtotal;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.name}</td>
+                <td>${item.price.toFixed(2)}</td>
+                <td>
+                    <div class="input-group input-group-sm justify-content-center" style="width:120px;margin:0 auto;">
+                        <button class="btn btn-outline-secondary" onclick="changeQty(${index}, -1)">-</button>
+                        <input type="number" class="form-control text-center" value="${item.quantity}" min="1" max="${item.stock}" onchange="updateQty(${index}, this.value)">
+                        <button class="btn btn-outline-secondary" onclick="changeQty(${index}, 1)">+</button>
+                    </div>
+                </td>
+                <td class="fw-semibold">${subtotal.toFixed(2)}</td>
+                <td><button class="btn btn-sm btn-danger" onclick="removeCart(${index})"><i class="bi bi-trash"></i></button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('totalAmount').value = `¥${total.toFixed(2)}`;
+        document.getElementById('payAmount').value = total.toFixed(2);
+    }
+
+    // 数量加减
+    function changeQty(index, num) {
+        const item = cart[index];
+        const newQty = item.quantity + num;
+        if (newQty >= 1 && newQty <= item.stock) {
+            item.quantity = newQty;
+            renderCart();
+        } else if (newQty > item.stock) {
+            alert('库存不足！');
+        }
+    }
+
+    // 手动修改数量
+    function updateQty(index, value) {
+        const item = cart[index];
+        const newQty = parseInt(value);
+        item.quantity = (newQty >= 1 && newQty <= item.stock) ? newQty : 1;
+        renderCart();
+    }
+
+    // 删除商品
+    function removeCart(index) {
+        cart.splice(index, 1);
+        renderCart();
+    }
+
+    // 确认结算（修复请求地址）
+    document.getElementById('checkoutBtn').addEventListener('click', async () => {
+        if (cart.length === 0) {
+            alert('请先添加药品！');
+            return;
+        }
+
+        const payment = document.getElementById('paymentMethod').value;
+        const payAmount = parseFloat(document.getElementById('payAmount').value);
+        const totalAmount = parseFloat(document.getElementById('totalAmount').value.replace('¥', ''));
+
+        if (payAmount < totalAmount - 0.01) {
+            alert('实付金额不能小于总计金额！');
+            return;
+        }
+
+        try {
+            const response = await fetch('/sale/checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    items: cart,
+                    payment_method: payment,
+                    pay_amount: payAmount
+                })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                alert(`结算成功！订单号：${result.order_id}`);
+                cart = [];
+                renderCart();
+            } else {
+                alert('结算失败：' + result.message);
+            }
+        } catch (e) {
+            console.error(e);
+            alert('网络错误，请重试');
+        }
+    });
+
+    // 药品详情
+    async function showDetail(medicineId) {
+        try {
+            const response = await fetch(`/medicine/${medicineId}?json=1`);
+            const data = await response.json();
+
+            const modalBody = document.getElementById('medicineDetailBody');
+            modalBody.innerHTML = `
+                <div class="row">
+                    <div class="col-md-4 text-center">
+                        ${data.image_path ?
+                            `<img src="${data.image_path}" class="img-fluid rounded" style="max-height:200px;">` :
+                            `<i class="bi bi-capsule" style="font-size:5rem;color:#ccc;"></i>`
+                        }
+                    </div>
+                    <div class="col-md-8">
+                        <h5>${data.name} <small class="text-secondary">${data.code}</small></h5>
+                        <p class="text-secondary">${data.generic_name || ''}</p>
+                        <hr>
+                        <table class="table table-sm table-borderless">
+                            <tr><th width="120">分类</th><td>${data.category_name || '-'}</td></tr>
+                            <tr><th>规格</th><td>${data.spec} / ${data.unit}</td></tr>
+                            <tr><th>厂家</th><td>${data.manufacturer}</td></tr>
+                            <tr><th>批准文号</th><td>${data.approval_no || '-'}</td></tr>
+                            <tr><th>处方药</th><td>${data.is_rx ? '是' : '否'}</td></tr>
+                            <tr><th>进货价</th><td>¥ ${parseFloat(data.purchase_price).toFixed(2)}</td></tr>
+                            <tr><th>售价</th><td class="fw-bold text-primary">¥ ${parseFloat(data.price).toFixed(2)}</td></tr>
+                            <tr><th>库存</th><td>${data.stock} (预警: ${data.warning_stock})</td></tr>
+                            <tr><th>门店</th><td>${data.store_name}</td></tr>
+                            <tr><th>说明</th><td>${data.description || '-'}</td></tr>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+            new bootstrap.Modal(document.getElementById('medicineDetailModal')).show();
+        } catch (error) {
+            alert('加载详情失败');
+        }
+    }
+</script>
+{% endblock %}

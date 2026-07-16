@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mt-3"><i class="bi bi-arrow-left-right"></i> 门店调拨管理</h2>
+
+{% if current_user.role == '药房管理员' %}
+<div class="card mt-3">
+    <div class="card-header">提交调拨申请</div>
+    <div class="card-body">
+        <form method="post" action="{{ url_for('create_transfer') }}">
+            <div class="row g-2">
+                <div class="col-md-2"><input type="number" name="medicine_id" class="form-control" placeholder="药品ID" required></div>
+                <div class="col-md-2"><input type="number" name="quantity" class="form-control" placeholder="数量" required></div>
+                <div class="col-md-2">
+                    <select name="from_store" class="form-select" required>
+                        {% for s in stores %}<option value="{{ s }}" {% if s==current_user.store_name %}selected{% endif %}>{{ s }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="to_store" class="form-select" required>
+                        {% for s in stores %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2"><input type="text" name="remark" class="form-control" placeholder="备注"></div>
+                <div class="col-md-2"><button class="btn btn-primary w-100">提交申请</button></div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- 状态过滤 -->
+<div class="mt-3">
+    <a href="?status=全部" class="btn btn-outline-secondary {% if status=='全部' %}active{% endif %}">全部</a>
+    <a href="?status=待处理" class="btn btn-outline-warning {% if status=='待处理' %}active{% endif %}">待处理</a>
+    <a href="?status=已通过" class="btn btn-outline-success {% if status=='已通过' %}active{% endif %}">已通过</a>
+    <a href="?status=已驳回" class="btn btn-outline-danger {% if status=='已驳回' %}active{% endif %}">已驳回</a>
+</div>
+
+<table class="table mt-3">
+    <thead><tr><th>单号</th><th>药品</th><th>数量</th><th>调出</th><th>调入</th><th>状态</th><th>创建人</th><th>操作</th></tr></thead>
+    <tbody>
+        {% for o in orders %}
+        <tr>
+            <td>{{ o.order_no }}</td><td>{{ o.medicine_name }}</td><td>{{ o.quantity }}</td>
+            <td>{{ o.from_store }}</td><td>{{ o.to_store }}</td><td>{{ o.status }}</td>
+            <td>{{ o.created_by }}</td>
+            <td>
+                {% if current_user.role == '管理员' and o.status == '待处理' %}
+                <a href="{{ url_for('approve_transfer', oid=o.id, passed=1) }}" class="btn btn-sm btn-success">通过</a>
+                <a href="{{ url_for('approve_transfer', oid=o.id, passed=0) }}" class="btn btn-sm btn-danger">驳回</a>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mt-3"><i class="bi bi-receipt"></i> 销售记录</h2>
+
+<!-- 月份筛选区域 -->
+<div class="card mt-3 mb-3">
+    <div class="card-body py-2">
+        <form method="get" action="{{ url_for('sales_orders') }}" class="row g-2 align-items-center">
+            <div class="col-auto">
+                <label for="year" class="form-label mb-0">按时间筛选:</label>
+            </div>
+            <div class="col-auto">
+                <select id="year" name="year" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="">全部年份</option>
+                    <option value="{{ now.year }}" {% if selected_year == now.year|string %}selected{% endif %}>
+                        {{ now.year }}年
+                    </option>
+                    <option value="{{ now.year + 1 }}" {% if selected_year == (now.year + 1)|string %}selected{% endif %}>
+                        {{ now.year + 1 }}年
+                    </option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <select id="month" name="month" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="">全部月份</option>
+                    {% for m in range(1, 13) %}
+                        {% set month_str = "%02d"|format(m) %}
+                        <option value="{{ month_str }}" {% if selected_month == month_str %}selected{% endif %}>
+                            {{ m }}月
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 订单总盈利栏（所有筛选结果的总盈利，不受分页影响） -->
+<div class="alert alert-success py-2 mb-2">
+    <strong><i class="bi bi-graph-up"></i> 订单总盈利：</strong>
+    <span class="fs-5 fw-bold">¥{{ "%.2f"|format(total_profit) }}</span>
+    <span class="text-muted ms-2">（共 {{ total }} 笔订单）</span>
+</div>
+
+<table class="table mt-3 table-hover">
+    <thead><tr><th>订单号</th><th>总金额</th><th>实付</th><th>盈利</th><th>支付方式</th><th>收银员</th><th>门店</th><th>时间</th></tr></thead>
+    <tbody>
+        {% for o in orders %}
+        <tr>
+            <td>
+                <a href="javascript:void(0)" class="order-detail-link" data-order-no="{{ o.order_no }}">
+                    {{ o.order_no }}
+                </a>
+            </td>
+            <td>{{ o.total_amount }}</td>
+            <td>{{ o.actual_amount }}</td>
+            <td class="{% if o.profit|float > 0 %}text-success{% elif o.profit|float < 0 %}text-danger{% endif %} fw-bold">¥{{ "%.2f"|format(o.profit|float) }}</td>
+            <td>{{ o.payment_method }}</td>
+            <td>{{ o.cashier }}</td>
+            <td>{{ o.store_name }}</td>
+            <td>{{ o.created_at }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% include '_pagination.html' %}
+
+<!-- 订单详情模态框 -->
+<div class="modal fade" id="orderDetailModal" tabindex="-1" aria-labelledby="orderDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="orderDetailModalLabel">订单详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info mb-3">
+                    <div class="row">
+                        <div class="col-md-3"><strong>订单号:</strong> <span id="modal_order_no"></span></div>
+                        <div class="col-md-3"><strong>下单时间:</strong> <span id="modal_order_time"></span></div>
+                        <div class="col-md-3"><strong>支付方式:</strong> <span id="modal_payment_method"></span></div>
+                        <div class="col-md-3"><strong>订单盈利:</strong> ¥<span id="modal_profit" class="fw-bold text-success"></span></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-4"><strong>收银员:</strong> <span id="modal_cashier"></span></div>
+                        <div class="col-md-4"><strong>门店:</strong> <span id="modal_store_name"></span></div>
+                        <div class="col-md-4"><strong>订单总金额:</strong> ¥<span id="modal_total_amount"></span></div>
+                    </div>
+                </div>
+
+                <h6>订单药品明细</h6>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm">
+                        <thead>
+                            <tr>
+                                <th>药品编码</th>
+                                <th>药品名称</th>
+                                <th>单价(¥)</th>
+                                <th>数量</th>
+                                <th>小计(¥)</th>
+                                <th>盈利(¥)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modal_items_body">
+                            <!-- 动态生成 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // 订单号点击事件
+    $('.order-detail-link').click(function() {
+        const orderNo = $(this).data('order-no');
+
+        $.get(`/api/sale_order/${orderNo}`, function(res) {
+            if (res.success) {
+                $('#modal_order_no').text(res.order.order_no);
+                $('#modal_order_time').text(res.order.created_at);
+                $('#modal_payment_method').text(res.order.payment_method);
+                $('#modal_cashier').text(res.order.cashier);
+                $('#modal_store_name').text(res.order.store_name);
+                $('#modal_total_amount').text(res.order.total_amount);
+                $('#modal_profit').text((res.order.profit || 0).toFixed(2));
+
+                let html = '';
+                res.items.forEach(function(item) {
+                    html += `
+                        <tr>
+                            <td>${item.code}</td>
+                            <td>${item.name}</td>
+                            <td>${item.unit_price}</td>
+                            <td>${item.sold_quantity}</td>
+                            <td>${item.amount}</td>
+                            <td>${(item.profit || 0).toFixed(2)}</td>
+                        </tr>
+                    `;
+                });
+                $('#modal_items_body').html(html);
+
+                $('#orderDetailModal').modal('show');
+            } else {
+                alert(res.message);
+            }
+        }).fail(function(xhr) {
+            alert('获取订单详情失败: ' + (xhr.responseJSON?.message || '服务器错误'));
+        });
+    });
+});
+</script>
+{% endblock %}

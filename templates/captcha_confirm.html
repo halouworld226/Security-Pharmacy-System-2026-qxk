@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center mt-4">
+    <div class="col-md-5">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <h5 class="text-center mb-3"><i class="bi bi-shield-lock me-2"></i>安全验证</h5>
+                <p class="text-secondary text-center small mb-3">此操作需要验证码确认</p>
+                <form method="get" action="{{ target_url }}">
+                    {% for k, v in params.items() %}
+                    <input type="hidden" name="{{ k }}" value="{{ v }}">
+                    {% endfor %}
+                    <input type="hidden" name="_confirm" value="1">
+                    <div class="text-center mb-3">
+                        <img src="{{ url_for('captcha_image') }}" id="captchaImg" style="border:1px solid #ddd;border-radius:4px;cursor:pointer;" onclick="this.src='{{ url_for('captcha_image') }}?'+Date.now()" title="点击刷新">
+                        <div class="mt-1"><small class="text-muted">点击图片刷新验证码</small></div>
+                    </div>
+                    <div class="mb-3">
+                        <input type="text" name="captcha" class="form-control text-center" placeholder="请输入验证码" required autocomplete="off" style="text-transform:uppercase;font-size:1.1rem;letter-spacing:2px;">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">确认操作</button>
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary w-100 mt-2">取消</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
