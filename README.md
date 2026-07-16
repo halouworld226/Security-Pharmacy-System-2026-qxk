@@ -33,7 +33,7 @@
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/halouworld226/Security-Pharmacy-System.git
+git clone https://github.com/halouworld226/Security-Pharmacy-System-2026-qxk.git
 cd Security-Pharmacy-System
 
 # 2. 启动所有服务（数据库 + Web 应用）
